@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "862698581046",
+    "project_id": "my-final-project-5f34f",
+    "storage_bucket": "my-final-project-5f34f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:862698581046:android:b64c1d162e77b1e2a1bc97",
+        "android_client_info": {
+          "package_name": "com.example.fashionhub"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyClk-vuZ6bPsJa3S8YbfmKlr7O0Wr7bsKc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
