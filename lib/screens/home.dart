@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-// Ensure these filenames match your project files exactly
+import '../theme/app_theme.dart';
 import 'create_post_screen.dart';
 import 'customer_dashboard.dart';
 import 'profile_customer.dart';
@@ -18,7 +17,6 @@ class UniversalHome extends StatefulWidget {
 class _UniversalHomeState extends State<UniversalHome> {
   int _currentIndex = 0;
 
-  // The 4 main movements of your app
   final List<Widget> _pages = [
     const HomeFeedPage(),
     const ExplorePage(),
@@ -29,89 +27,188 @@ class _UniversalHomeState extends State<UniversalHome> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.background,
+      appBar: _currentIndex == 0 ? _buildAppBar() : null,
+      body: IndexedStack(index: _currentIndex, children: _pages),
+      floatingActionButton: _currentIndex == 0 ? _buildFAB() : null,
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
 
-      // App Bar only shows on the Home Feed (Index 0)
-      appBar: _currentIndex == 0
-          ? AppBar(
-              backgroundColor: Colors.white,
-              elevation: 0,
-              centerTitle: false,
-              title: const Text(
-                "FASHION HUB",
-                style: TextStyle(
-                  color: Colors.black,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              actions: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Colors.black,
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: AppColors.surface,
+      elevation: 0,
+      centerTitle: false,
+      title: RichText(
+        text: TextSpan(
+          style: const TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+          children: const [
+            TextSpan(
+              text: 'Fashion',
+              style: TextStyle(color: AppColors.primary),
+            ),
+            TextSpan(
+              text: 'Hub',
+              style: TextStyle(color: AppColors.secondary),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          child: IconButton(
+            icon: Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant,
+                    borderRadius: BorderRadius.circular(AppBorderRadius.sm),
                   ),
-                  onPressed: () {},
+                  child: const Icon(
+                    Icons.notifications_none_rounded,
+                    color: AppColors.textPrimary,
+                    size: 22,
+                  ),
+                ),
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.coral,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
               ],
-            )
-          : null,
-
-      // IndexedStack keeps the scroll position alive when switching tabs
-      body: IndexedStack(index: _currentIndex, children: _pages),
-
-      // FAB only on Home Feed
-      floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton(
-              backgroundColor: const Color(0xFFF06262),
-              elevation: 4,
-              child: const Icon(
-                Icons.add_photo_alternate_rounded,
-                color: Colors.white,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CreatePostScreen(),
-                  ),
-                );
-              },
-            )
-          : null,
-
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFFF06262),
-        unselectedItemColor: Colors.grey,
-        showSelectedLabels: true,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: "Feed"),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            label: "Explore",
+            ),
+            onPressed: () {},
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
-            label: "Dashboard",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: "Profile",
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFAB() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: AppColors.warmGradient,
+        shape: BoxShape.circle,
+        boxShadow: AppShadows.colored(AppColors.coral),
+      ),
+      child: FloatingActionButton(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const CreatePostScreen()),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
           ),
         ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, "Feed"),
+              _buildNavItem(
+                1,
+                Icons.explore_rounded,
+                Icons.explore_outlined,
+                "Explore",
+              ),
+              _buildNavItem(
+                2,
+                Icons.grid_view_rounded,
+                Icons.grid_view_outlined,
+                "Dashboard",
+              ),
+              _buildNavItem(
+                3,
+                Icons.person_rounded,
+                Icons.person_outline,
+                "Profile",
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem(
+    int index,
+    IconData activeIcon,
+    IconData inactiveIcon,
+    String label,
+  ) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _currentIndex = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppBorderRadius.md),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isSelected ? activeIcon : inactiveIcon,
+              color: isSelected ? AppColors.primary : AppColors.textTertiary,
+              size: 24,
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
-// --- THE HOME FEED MOVEMENT ---
+// --- THE HOME FEED PAGE ---
 class HomeFeedPage extends StatelessWidget {
   const HomeFeedPage({super.key});
 
-  // THE LIKE LOGIC: Adds/Removes user ID from the 'likes' array in Firestore
   void _toggleLike(String postId, List likes) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
@@ -137,22 +234,13 @@ class HomeFeedPage extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 10, 16, 5),
-            child: Text(
-              "Top Tailors",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-          ),
-          _buildStories(),
-          const SizedBox(height: 15),
+          const SizedBox(height: 8),
+          _buildTopTailors(),
+          const SizedBox(height: 20),
           _buildCategories(),
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-              "Latest Inspiration",
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-            ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Text("Latest Inspiration", style: AppTextStyles.h4),
           ),
           _buildGlobalFeed(),
         ],
@@ -160,52 +248,104 @@ class HomeFeedPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStories() {
-    return SizedBox(
-      height: 90,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.only(left: 16),
-        itemCount: 5,
-        itemBuilder: (context, index) => Container(
-          margin: const EdgeInsets.only(right: 15),
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFFF06262), width: 2),
+  Widget _buildTopTailors() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("Top Tailors", style: AppTextStyles.h4),
+              TextButton(
+                onPressed: () {},
+                child: Text(
+                  "See All",
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: const CircleAvatar(
-            radius: 35,
-            backgroundImage: NetworkImage(
-              'https://i.pravatar.cc/150?u=fashion',
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(left: 20),
+            itemCount: 6,
+            itemBuilder: (context, index) => Container(
+              margin: const EdgeInsets.only(right: 16),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.warmGradient,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: AppColors.surface,
+                        shape: BoxShape.circle,
+                      ),
+                      child: CircleAvatar(
+                        radius: 30,
+                        backgroundColor: AppColors.surfaceVariant,
+                        backgroundImage: NetworkImage(
+                          'https://i.pravatar.cc/150?u=tailor$index',
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Tailor ${index + 1}',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 
   Widget _buildCategories() {
-    final cats = ["All", "Tradition", "Bridal", "Suits", "Lace"];
+    final cats = ["All", "Traditional", "Bridal", "Suits", "Lace", "Casual"];
     return SizedBox(
-      height: 35,
+      height: 42,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: cats.length,
         itemBuilder: (context, index) => Container(
           margin: const EdgeInsets.only(right: 10),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: index == 0 ? Colors.black : Colors.grey[100],
-            borderRadius: BorderRadius.circular(20),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            cats[index],
-            style: TextStyle(
-              color: index == 0 ? Colors.white : Colors.black,
-              fontWeight: FontWeight.bold,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              gradient: index == 0 ? AppColors.warmGradient : null,
+              color: index == 0 ? null : AppColors.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.xl),
+              boxShadow: index == 0
+                  ? AppShadows.colored(AppColors.coral)
+                  : AppShadows.soft,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              cats[index],
+              style: AppTextStyles.labelMedium.copyWith(
+                color: index == 0 ? Colors.white : AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ),
@@ -219,11 +359,24 @@ class HomeFeedPage extends StatelessWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('posts')
-          .orderBy('createdAt', descending: true)
+          .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData)
-          return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
+                strokeWidth: 3,
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.data!.docs.isEmpty) {
+          return _buildEmptyFeed();
+        }
 
         return ListView.builder(
           shrinkWrap: true,
@@ -235,73 +388,260 @@ class HomeFeedPage extends StatelessWidget {
             List likes = post['likes'] ?? [];
             bool isLiked = likes.contains(currentUserId);
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ListTile(
-                  leading: const CircleAvatar(backgroundColor: Colors.grey),
-                  title: Text(
-                    post['authorName'] ?? "Designer",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  subtitle: Text(post['authorRole'] ?? "Fashion Hub"),
-                ),
-                Image.network(
-                  post['imageUrl'] ?? '',
-                  height: 400,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-
-                // ACTION BAR
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          isLiked ? Icons.favorite : Icons.favorite_border,
-                          color: isLiked ? Colors.red : Colors.black,
-                        ),
-                        onPressed: () => _toggleLike(doc.id, likes),
-                      ),
-                      Text(
-                        "${likes.length}",
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(width: 15),
-                      const Icon(Icons.chat_bubble_outline),
-                      const SizedBox(width: 15),
-                      const Icon(Icons.send_outlined),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                  child: RichText(
-                    text: TextSpan(
-                      style: const TextStyle(color: Colors.black),
-                      children: [
-                        TextSpan(
-                          text: "${post['authorName']} ",
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        TextSpan(text: post['description'] ?? ""),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                const Divider(),
-              ],
-            );
+            return _buildPostCard(doc.id, post, likes, isLiked);
           },
         );
       },
+    );
+  }
+
+  Widget _buildEmptyFeed() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              size: 64,
+              color: AppColors.textTertiary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "No posts yet",
+              style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              "Be the first to share your fashion inspiration!",
+              style: AppTextStyles.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPostCard(
+    String docId,
+    Map<String, dynamic> post,
+    List likes,
+    bool isLiked,
+  ) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        boxShadow: AppShadows.soft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.warmGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.surfaceVariant,
+                    child: Icon(Icons.person, color: AppColors.textTertiary),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        post['userName'] ?? "Designer",
+                        style: AppTextStyles.bodyLarge.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.only(top: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.xs,
+                          ),
+                        ),
+                        child: Text(
+                          post['userType'] ?? "Fashion Hub",
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_horiz,
+                    color: AppColors.textTertiary,
+                  ),
+                  onPressed: () {},
+                ),
+              ],
+            ),
+          ),
+
+          // Image
+          ClipRRect(
+            child: Image.network(
+              (post['mediaUrls'] as List?)?.isNotEmpty == true
+                  ? post['mediaUrls'][0]
+                  : '',
+              height: 350,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  height: 350,
+                  color: AppColors.surfaceVariant,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                          : null,
+                      color: AppColors.primary,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('Image load error: $error');
+                debugPrint('Image URL: ${post['mediaUrls']?[0]}');
+                return Container(
+                  height: 350,
+                  color: AppColors.surfaceVariant,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.image_not_supported,
+                          size: 48,
+                          color: AppColors.textTertiary,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Image unavailable',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // Actions
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _buildActionButton(
+                      icon: isLiked ? Icons.favorite : Icons.favorite_border,
+                      color: isLiked ? AppColors.coral : AppColors.textPrimary,
+                      count: likes.length,
+                      onTap: () => _toggleLike(docId, likes),
+                    ),
+                    const SizedBox(width: 20),
+                    _buildActionButton(
+                      icon: Icons.chat_bubble_outline,
+                      color: AppColors.textPrimary,
+                      count: 0,
+                      onTap: () {},
+                    ),
+                    const SizedBox(width: 20),
+                    _buildActionButton(
+                      icon: Icons.send_outlined,
+                      color: AppColors.textPrimary,
+                      onTap: () {},
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.bookmark_border,
+                        color: AppColors.textPrimary,
+                      ),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                RichText(
+                  text: TextSpan(
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: "${post['userName']} ",
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      TextSpan(text: post['content'] ?? ""),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    int? count,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 26),
+          if (count != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              count.toString(),
+              style: AppTextStyles.labelLarge.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

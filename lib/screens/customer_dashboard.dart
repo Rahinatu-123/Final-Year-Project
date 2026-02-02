@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'create_post_screen.dart';
-import 'profile_customer.dart';
-import 'home.dart';
+import '../theme/app_theme.dart';
+import 'style_gallery.dart';
+import 'sew_with_me.dart';
+import 'explore.dart';
+import 'overlay.dart'; // AICameraOverlay for measurement capture
 
 class CustomerDashboard extends StatelessWidget {
   const CustomerDashboard({super.key});
@@ -9,114 +11,125 @@ class CustomerDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppColors.background,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
-            const Text(
-              "My Dashboard",
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            // Header with gradient
+            _buildHeader(),
+
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Quick Actions Grid
+                  Text("Quick Actions", style: AppTextStyles.h4),
+                  const SizedBox(height: 16),
+                  _buildQuickActionsGrid(context),
+
+                  const SizedBox(height: 28),
+
+                  // My Measurements Card
+                  Text("My Measurements", style: AppTextStyles.h4),
+                  const SizedBox(height: 16),
+                  _buildMeasurementCard(),
+
+                  const SizedBox(height: 28),
+
+                  // Recent Orders Section
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Recent Orders", style: AppTextStyles.h4),
+                      TextButton(
+                        onPressed: () {},
+                        child: Text(
+                          "View All",
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildOrderTile(
+                    "Bridal Asoebi",
+                    "In Progress",
+                    "Oct 24",
+                    0.65,
+                    AppColors.coral,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildOrderTile(
+                    "Casual Suit",
+                    "Completed",
+                    "Oct 12",
+                    1.0,
+                    AppColors.success,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildOrderTile(
+                    "Kente Dress",
+                    "Pending",
+                    "Oct 28",
+                    0.2,
+                    AppColors.gold,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 20),
-
-            // --- QUICK STATS / ACTION GRID ---
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 15,
-              mainAxisSpacing: 15,
-              childAspectRatio: 1.5,
-              children: [
-                _buildStatCard(
-                  "Active Orders",
-                  "02",
-                  Icons.shopping_bag,
-                  Colors.blue,
-                ),
-                _buildStatCard(
-                  "Saved Designs",
-                  "14",
-                  Icons.favorite,
-                  Colors.pink,
-                ),
-                _buildStatCard(
-                  "My Sizes",
-                  "Updated",
-                  Icons.straighten,
-                  Colors.orange,
-                ),
-                _buildStatCard("Messages", "05", Icons.chat, Colors.green),
-              ],
-            ),
-
-            const SizedBox(height: 30),
-
-            // --- MEASUREMENT QUICK VIEW ---
-            const Text(
-              "My Measurements",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            _buildMeasurementSummary(),
-
-            const SizedBox(height: 30),
-
-            // --- RECENT ORDERS SECTION ---
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  "Recent Orders",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                TextButton(onPressed: () {}, child: const Text("View All")),
-              ],
-            ),
-            _buildOrderTile("Bridal Asoebi", "In Progress", "Oct 24"),
-            _buildOrderTile("Casual Suit", "Completed", "Oct 12"),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 30),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10),
-        ],
+        gradient: AppColors.warmGradient,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(32),
+          bottomRight: Radius.circular(32),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(icon, color: color, size: 24),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Welcome Back!",
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "My Dashboard",
+                    style: AppTextStyles.h2.copyWith(color: Colors.white),
+                  ),
+                ],
               ),
-              Text(
-                title,
-                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                ),
+                child: const Icon(
+                  Icons.settings_outlined,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
             ],
           ),
@@ -125,69 +138,292 @@ class CustomerDashboard extends StatelessWidget {
     );
   }
 
-  Widget _buildMeasurementSummary() {
+  Widget _buildQuickActionsGrid(BuildContext context) {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.4,
+      children: [
+        _buildActionCard(
+          context,
+          "Generate\nMeasurements",
+          Icons.straighten,
+          AppColors.coral,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AICameraOverlay()),
+          ),
+        ),
+        _buildActionCard(
+          context,
+          "Find a\nTailor",
+          Icons.search,
+          AppColors.accent,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ExplorePage()),
+          ),
+        ),
+        _buildActionCard(
+          context,
+          "Browse\nStyles",
+          Icons.style,
+          AppColors.secondary,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const StyleGalleryPage()),
+          ),
+        ),
+        _buildActionCard(
+          context,
+          "Sew With\nMe",
+          Icons.people,
+          AppColors.gold,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SewWithMePage()),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+          boxShadow: AppShadows.soft,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            Text(
+              title,
+              style: AppTextStyles.labelLarge.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMeasurementCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.black,
-        borderRadius: BorderRadius.circular(15),
+        gradient: AppColors.darkGradient,
+        borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        boxShadow: AppShadows.medium,
       ),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: Column(
         children: [
-          _MeasureItem("Bust", "34"),
-          _MeasureItem("Waist", "28"),
-          _MeasureItem("Hips", "38"),
-          _MeasureItem("Length", "42"),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Body Measurements",
+                style: AppTextStyles.labelLarge.copyWith(color: Colors.white70),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(AppBorderRadius.xl),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: AppColors.accentLight,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Updated",
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.accentLight,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: const [
+              _MeasureItem("Bust", "34", "in"),
+              _MeasureItem("Waist", "28", "in"),
+              _MeasureItem("Hips", "38", "in"),
+              _MeasureItem("Length", "42", "in"),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(AppBorderRadius.md),
+            ),
+            child: Center(
+              child: Text(
+                "View All Measurements",
+                style: AppTextStyles.buttonMedium.copyWith(color: Colors.white),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildOrderTile(String name, String status, String date) {
+  Widget _buildOrderTile(
+    String name,
+    String status,
+    String date,
+    double progress,
+    Color statusColor,
+  ) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.md),
+        boxShadow: AppShadows.soft,
       ),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            shape: BoxShape.circle,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+            ),
+            child: const Icon(Icons.checkroom, color: AppColors.textPrimary),
           ),
-          child: const Icon(Icons.checkroom, color: Colors.black),
-        ),
-        title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(status),
-        trailing: Text(date, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppBorderRadius.xs),
+                      ),
+                      child: Text(
+                        status,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(date, style: AppTextStyles.labelSmall),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: AppColors.surfaceVariant,
+                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                    minHeight: 4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Icon(Icons.chevron_right, color: AppColors.textTertiary),
+        ],
       ),
     );
   }
 }
 
 class _MeasureItem extends StatelessWidget {
-  final String label, value;
-  const _MeasureItem(this.label, this.value);
+  final String label, value, unit;
+  const _MeasureItem(this.label, this.value, this.unit);
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              value,
+              style: AppTextStyles.h3.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                unit,
+                style: AppTextStyles.labelSmall.copyWith(color: Colors.white60),
+              ),
+            ),
+          ],
         ),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(color: Colors.white54),
+        ),
       ],
     );
   }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'login.dart'; // Ensure your login file is named login.dart
+import '../theme/app_theme.dart';
+import 'login.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -11,13 +12,11 @@ class SignupPage extends StatefulWidget {
 }
 
 class _SignupPageState extends State<SignupPage> {
-  // State variables
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   String _selectedRole = 'Customer';
   final List<String> _roles = ['Customer', 'Seamstress', 'Fabric Seller'];
 
-  // Controllers to capture user input
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -35,7 +34,6 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  // --- The Core Logic: Auth -> Firestore -> Success Message -> Redirect ---
   Future<void> _handleSignUp() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -43,53 +41,48 @@ class _SignupPageState extends State<SignupPage> {
     final firstName = _firstNameController.text.trim();
     final lastName = _lastNameController.text.trim();
 
-    // 1. Validations
     if (email.isEmpty ||
         password.isEmpty ||
         firstName.isEmpty ||
         lastName.isEmpty) {
-      _showMessage("Please fill in all fields", Colors.orange);
+      _showMessage("Please fill in all fields", AppColors.warning);
       return;
     }
 
     if (password != confirmPassword) {
-      _showMessage("Passwords do not match", Colors.red);
+      _showMessage("Passwords do not match", AppColors.error);
       return;
     }
 
     if (password.length < 6) {
-      _showMessage("Password must be at least 6 characters", Colors.red);
+      _showMessage("Password must be at least 6 characters", AppColors.error);
       return;
     }
 
-    // 2. Start Loading State
     setState(() => _isLoading = true);
 
     try {
-      // 3. Create User in Firebase Authentication
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
 
       final String uid = userCredential.user!.uid;
 
-      // 4. Save Additional Info (Names & Role) to Cloud Firestore
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'firstName': firstName,
         'lastName': lastName,
+        'fullName': '$firstName $lastName',
         'email': email,
         'role': _selectedRole,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // 5. Success Flow: Message then Redirect
       if (mounted) {
         _showMessage(
           "Account created successfully! Redirecting to login...",
-          Colors.green,
+          AppColors.success,
         );
 
-        // Wait 2 seconds so they can read the message
         await Future.delayed(const Duration(seconds: 2));
 
         if (mounted) {
@@ -101,9 +94,9 @@ class _SignupPageState extends State<SignupPage> {
         }
       }
     } on FirebaseAuthException catch (e) {
-      _showMessage(e.message ?? "Authentication failed", Colors.red);
+      _showMessage(e.message ?? "Authentication failed", AppColors.error);
     } catch (e) {
-      _showMessage("An unexpected error occurred", Colors.red);
+      _showMessage("An unexpected error occurred", AppColors.error);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -114,6 +107,10 @@ class _SignupPageState extends State<SignupPage> {
       SnackBar(
         content: Text(message),
         backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -194,7 +191,7 @@ class _SignupPageState extends State<SignupPage> {
                 ),
               ),
               const SizedBox(height: 8),
-              _buildRoleDropdown(),
+              _buildRoleSelector(),
 
               const SizedBox(height: 35),
 
@@ -250,14 +247,13 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 32),
             ],
           ),
         ),
       ),
     );
   }
-
-  // --- Reusable UI Builders ---
 
   Widget _buildTextField(
     String hint, {
@@ -298,7 +294,7 @@ class _SignupPageState extends State<SignupPage> {
     );
   }
 
-  Widget _buildRoleDropdown() {
+  Widget _buildRoleSelector() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(

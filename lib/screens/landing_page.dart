@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 import 'login.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -22,20 +23,19 @@ class WelcomeScreen extends StatelessWidget {
 
               // --- Brand Name ---
               RichText(
-                text: const TextSpan(
-                  style: TextStyle(
+                text: TextSpan(
+                  style: AppTextStyles.h1.copyWith(
                     fontSize: 32,
-                    fontWeight: FontWeight.bold,
                     letterSpacing: 1.2,
                   ),
-                  children: [
+                  children: const [
                     TextSpan(
                       text: 'Fashion',
-                      style: TextStyle(color: Color(0xFFF06262)),
+                      style: TextStyle(color: AppColors.primary),
                     ),
                     TextSpan(
                       text: 'Hub',
-                      style: TextStyle(color: Colors.black),
+                      style: TextStyle(color: AppColors.secondary),
                     ),
                   ],
                 ),
@@ -65,13 +65,11 @@ class WelcomeScreen extends StatelessWidget {
               const Spacer(flex: 2),
 
               // --- Get Started Button ---
-              // --- Get Started Button ---
               SizedBox(
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
                   onPressed: () {
-                    // This is the right place for the navigation code
                     Navigator.push(
                       context,
                       MaterialPageRoute(

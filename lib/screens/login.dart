@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../theme/app_theme.dart';
 import 'signUp.dart';
-import 'home.dart'; // Make sure this matches your filename
+import 'home.dart';
+import 'forgot_password.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -48,9 +50,6 @@ class _LoginPageState extends State<LoginPage> {
           .get();
 
       if (userDoc.exists) {
-        // --- NAVIGATION LOGIC ---
-        // We navigate everyone to the Universal Home feed first.
-        // You can pass the role to the Home if you want to customize it.
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -71,7 +70,14 @@ class _LoginPageState extends State<LoginPage> {
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+        ),
+      ),
     );
   }
 
@@ -85,13 +91,15 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             children: [
               const SizedBox(height: 60),
-              // If you don't have a logo asset yet, replace this with an Icon
               Image.asset('assets/logo.png', height: 80),
               const SizedBox(height: 20),
-
               const Text(
                 "Welcome Back",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D2D2D),
+                ),
               ),
               const SizedBox(height: 30),
 
@@ -101,7 +109,6 @@ class _LoginPageState extends State<LoginPage> {
                 keyboardType: TextInputType.emailAddress,
               ),
               const SizedBox(height: 20),
-
               _buildTextField(
                 hint: 'Password',
                 controller: _passwordController,
@@ -115,7 +122,14 @@ class _LoginPageState extends State<LoginPage> {
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ForgotPasswordPage(),
+                      ),
+                    );
+                  },
                   child: const Text(
                     "Forgot Password?",
                     style: TextStyle(color: Colors.blue),
@@ -124,7 +138,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
 
               const SizedBox(height: 25),
-
               SizedBox(
                 width: double.infinity,
                 height: 55,
@@ -132,6 +145,7 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _isLoading ? null : _handleLogin,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF06262),
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
@@ -152,7 +166,11 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 30),
               _buildDivider(),
               const SizedBox(height: 30),
-              _buildSocialButton(text: 'Log in with Google', isGoogle: true),
+              _buildSocialButton(
+                text: 'Log in with Google',
+                icon: Icons.g_mobiledata,
+                iconColor: Colors.red,
+              ),
 
               const SizedBox(height: 60),
               Row(
@@ -176,6 +194,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -183,7 +202,6 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // --- Helper UI Components ---
   Widget _buildTextField({
     required String hint,
     required TextEditingController controller,
@@ -235,7 +253,11 @@ class _LoginPageState extends State<LoginPage> {
     ],
   );
 
-  Widget _buildSocialButton({required String text, required bool isGoogle}) {
+  Widget _buildSocialButton({
+    required String text,
+    required IconData icon,
+    required Color iconColor,
+  }) {
     return Container(
       width: double.infinity,
       height: 55,
@@ -246,8 +268,7 @@ class _LoginPageState extends State<LoginPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (isGoogle)
-            const Icon(Icons.g_mobiledata, color: Colors.red, size: 30),
+          Icon(icon, color: iconColor, size: 30),
           const SizedBox(width: 10),
           Text(text, style: const TextStyle(fontWeight: FontWeight.w500)),
         ],
