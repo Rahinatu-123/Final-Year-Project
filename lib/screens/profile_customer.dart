@@ -556,13 +556,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildStatItem("12", "Orders"),
-          _buildDivider(),
-          _buildStatItem("48", "Saved"),
-          _buildDivider(),
-          _buildStatItem("156", "Following"),
-        ],
+        children: [_buildStatItem("0", "Posts")],
       ),
     );
   }
