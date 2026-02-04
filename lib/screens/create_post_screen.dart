@@ -5,6 +5,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
@@ -14,7 +16,7 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
-  File? _image;
+  List<File> _selectedMedia = [];
   final TextEditingController _captionController = TextEditingController();
   final TextEditingController _tagController = TextEditingController();
   bool _isLoading = false;
@@ -55,23 +57,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImages() async {
     try {
-      final pickedFile = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 70,
-      );
+      final pickedFiles = await ImagePicker().pickMultiImage(imageQuality: 70);
 
-      if (pickedFile == null) return;
+      if (pickedFiles.isEmpty) return;
 
       setState(() {
-        _image = File(pickedFile.path);
+        _selectedMedia.addAll(pickedFiles.map((file) => File(file.path)));
       });
     } catch (e) {
       debugPrint('Image picker error: $e');
       if (e.toString().contains('IMGMapper') ||
           e.toString().contains('metadata')) {
-        // This is a metadata-related error, show user-friendly message
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text(
@@ -87,7 +85,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Failed to pick image'),
+            content: const Text('Failed to pick images'),
             backgroundColor: AppColors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -99,13 +97,23 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     }
   }
 
-  Future<void> _uploadPost() async {
-    final user = FirebaseAuth.instance.currentUser;
+  Future<void> _pickVideo() async {
+    try {
+      final pickedFile = await ImagePicker().pickVideo(
+        source: ImageSource.gallery,
+      );
 
-    if (user == null) {
+      if (pickedFile == null) return;
+
+      debugPrint('Video picked: ${pickedFile.path}');
+      setState(() {
+        _selectedMedia.add(File(pickedFile.path));
+      });
+    } catch (e) {
+      debugPrint('Video picker error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Please log in to post'),
+          content: const Text('Failed to pick video'),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -113,36 +121,65 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           ),
         ),
       );
+    }
+  }
+
+  Future<void> _newUploadPost() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please log in to post'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+            ),
+          ),
+        );
+      }
       return;
     }
 
-    if (_image == null || _captionController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please select an image and write a caption'),
-          backgroundColor: AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+    if (_selectedMedia.isEmpty || _captionController.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Please select media and write a caption'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+            ),
           ),
-        ),
-      );
+        );
+      }
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final fileName =
-          'posts/${user.uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final List<String> mediaUrls = [];
+      String? videoUrl;
+      String postType = 'image';
 
-      final ref = FirebaseStorage.instance.ref().child(fileName);
-      final uploadTask = ref.putFile(_image!);
-
-      final snapshot = await uploadTask;
-      final imageUrl = await snapshot.ref.getDownloadURL();
-
-      debugPrint('Image uploaded successfully: $imageUrl');
+      for (final mediaFile in _selectedMedia) {
+        final isVideo = _isVideoFile(mediaFile.path);
+        if (isVideo) {
+          postType = 'video';
+          final uploadedVideoUrl = await _uploadVideoToCloudinary(
+            mediaFile.path,
+          );
+          videoUrl = uploadedVideoUrl;
+        } else {
+          final uploadedImageUrl = await _uploadImageToCloudinary(
+            mediaFile.path,
+          );
+          mediaUrls.add(uploadedImageUrl);
+        }
+      }
 
       await FirebaseFirestore.instance.collection('posts').add({
         'userId': user.uid,
@@ -150,9 +187,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         'userName': _userName,
         'userProfilePicUrl': '',
         'content': _captionController.text.trim(),
-        'mediaUrls': [imageUrl],
-        'videoUrl': '',
-        'postType': 'image',
+        'mediaUrls': mediaUrls,
+        'videoUrl': videoUrl ?? '',
+        'postType': postType,
         'likes': [],
         'likeCount': 0,
         'commentCount': 0,
@@ -163,8 +200,6 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         'sharedStyleId': '',
         'sharedFabricId': '',
       });
-
-      debugPrint('Post created successfully with mediaUrls: [${imageUrl}]');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -180,20 +215,89 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      debugPrint('Post upload failed: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Upload failed: $e'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: $e'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+            ),
           ),
-        ),
-      );
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<String> _uploadImageToCloudinary(String imagePath) async {
+    const cloudName = 'dr8f7af8z';
+    const uploadPreset = 'fashionHub_app';
+    final imageFile = File(imagePath);
+    final url = Uri.parse(
+      'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
+    );
+
+    final request = http.MultipartRequest('POST', url)
+      ..fields['upload_preset'] = uploadPreset
+      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+    final response = await request.send();
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload image to Cloudinary');
+    }
+
+    final resStr = await response.stream.bytesToString();
+    final resJson = json.decode(resStr);
+    return resJson['secure_url'];
+  }
+
+  Future<String> _uploadVideoToCloudinary(String videoPath) async {
+    const cloudName = 'dr8f7af8z';
+    const uploadPreset = 'fashionHub_app';
+    final videoFile = File(videoPath);
+    final url = Uri.parse(
+      'https://api.cloudinary.com/v1_1/$cloudName/video/upload',
+    );
+
+    final request = http.MultipartRequest('POST', url)
+      ..fields['upload_preset'] = uploadPreset
+      ..files.add(await http.MultipartFile.fromPath('file', videoFile.path));
+
+    final response = await request.send();
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload video to Cloudinary');
+    }
+
+    final resStr = await response.stream.bytesToString();
+    final resJson = json.decode(resStr);
+    return resJson['secure_url'];
+  }
+
+  bool _isVideoFile(String path) {
+    final videoExtensions = [
+      'mp4',
+      'mov',
+      'avi',
+      'mkv',
+      'flv',
+      'wmv',
+      'webm',
+      '3gp',
+      'ogv',
+    ];
+    final extension = path.toLowerCase().split('.').last;
+    final isVideo = videoExtensions.contains(extension);
+    debugPrint('File path: $path, Extension: $extension, Is Video: $isVideo');
+    return isVideo;
+  }
+
+  @override
+  noSuchMethod(Invocation invocation) {
+    // TODO: implement noSuchMethod
+    return super.noSuchMethod(invocation);
   }
 
   @override
@@ -223,7 +327,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         actions: [
           if (!_isLoading)
             GestureDetector(
-              onTap: _uploadPost,
+              onTap: _newUploadPost,
               child: Container(
                 margin: const EdgeInsets.all(8),
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -318,92 +422,206 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Image picker box
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Container(
-                      height: 320,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(AppBorderRadius.lg),
-                        border: Border.all(
-                          color: _image != null
-                              ? Colors.transparent
-                              : AppColors.textTertiary.withOpacity(0.3),
-                          width: 2,
-                          strokeAlign: BorderSide.strokeAlignInside,
+                  // Media picker section
+                  if (_selectedMedia.isEmpty)
+                    GestureDetector(
+                      onTap: () => _showMediaPickerOptions(),
+                      child: Container(
+                        height: 320,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.lg,
+                          ),
+                          border: Border.all(
+                            color: AppColors.textTertiary.withOpacity(0.3),
+                            width: 2,
+                            strokeAlign: BorderSide.strokeAlignInside,
+                          ),
+                          boxShadow: AppShadows.soft,
                         ),
-                        boxShadow: AppShadows.soft,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.add_photo_alternate_outlined,
+                                size: 48,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Tap to add photos or videos',
+                              style: AppTextStyles.bodyLarge.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Share your latest design or inspiration',
+                              style: AppTextStyles.bodySmall,
+                            ),
+                          ],
+                        ),
                       ),
-                      child: _image != null
-                          ? Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(
-                                    AppBorderRadius.lg,
-                                  ),
-                                  child: Image.file(
-                                    _image!,
-                                    fit: BoxFit.cover,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                  ),
-                                ),
-                                Positioned(
-                                  top: 12,
-                                  right: 12,
-                                  child: GestureDetector(
-                                    onTap: () => setState(() => _image = null),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.textPrimary
-                                            .withOpacity(0.6),
-                                        shape: BoxShape.circle,
+                    )
+                  else
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Selected Media (${_selectedMedia.length})",
+                          style: AppTextStyles.labelLarge.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              ..._selectedMedia.asMap().entries.map((entry) {
+                                int idx = entry.key;
+                                File file = entry.value;
+                                bool isVideo = _isVideoFile(file.path);
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 12),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(
+                                          AppBorderRadius.md,
+                                        ),
+                                        child: isVideo
+                                            ? Container(
+                                                width: 120,
+                                                height: 120,
+                                                color: AppColors.surface,
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.videocam,
+                                                      size: 40,
+                                                      color: AppColors.primary,
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      'Video',
+                                                      style: AppTextStyles
+                                                          .labelSmall,
+                                                    ),
+                                                  ],
+                                                ),
+                                              )
+                                            : Image.file(
+                                                file,
+                                                width: 120,
+                                                height: 120,
+                                                fit: BoxFit.cover,
+                                              ),
                                       ),
-                                      child: const Icon(
-                                        Icons.close,
-                                        color: Colors.white,
-                                        size: 18,
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () => setState(() {
+                                            _selectedMedia.removeAt(idx);
+                                          }),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.textPrimary
+                                                  .withOpacity(0.7),
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(
+                                              Icons.close,
+                                              color: Colors.white,
+                                              size: 14,
+                                            ),
+                                          ),
+                                        ),
                                       ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                              GestureDetector(
+                                onTap: () => _showMediaPickerOptions(),
+                                child: Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surface,
+                                    borderRadius: BorderRadius.circular(
+                                      AppBorderRadius.md,
+                                    ),
+                                    border: Border.all(
+                                      color: AppColors.primary.withOpacity(0.5),
+                                      width: 2,
+                                      strokeAlign: BorderSide.strokeAlignInside,
+                                    ),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.add,
+                                      size: 40,
+                                      color: AppColors.primary,
                                     ),
                                   ),
                                 ),
-                              ],
-                            )
-                          : Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.add_photo_alternate_outlined,
-                                    size: 48,
-                                    color: AppColors.primary,
-                                  ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          children: _selectedMedia.map((file) {
+                            bool isVideo = _isVideoFile(file.path);
+                            int index = _selectedMedia.indexOf(file);
+
+                            return Chip(
+                              avatar: Icon(
+                                isVideo ? Icons.videocam : Icons.image,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              label: Text(
+                                isVideo
+                                    ? 'Video ${index + 1}'
+                                    : 'Image ${index + 1}',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: Colors.white,
                                 ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Tap to add a photo',
-                                  style: AppTextStyles.bodyLarge.copyWith(
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  'Share your latest design or inspiration',
-                                  style: AppTextStyles.bodySmall,
-                                ),
-                              ],
-                            ),
+                              ),
+                              backgroundColor: AppColors.primary,
+                              deleteIcon: const Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                              onDeleted: () => setState(() {
+                                _selectedMedia.remove(file);
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
-                  ),
+
                   const SizedBox(height: 24),
 
                   // Caption label
@@ -594,6 +812,144 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showMediaPickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppBorderRadius.lg),
+        ),
+      ),
+      backgroundColor: AppColors.surface,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select Media',
+              style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                _pickImages();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.collections_outlined,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Images',
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          'Add multiple photos',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                _pickVideo();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.coral.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                  border: Border.all(color: AppColors.coral.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.videocam_outlined,
+                      color: AppColors.coral,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Select Video',
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          'Add a video to your post',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                ),
+                child: Center(
+                  child: Text(
+                    'Cancel',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -266,6 +266,12 @@ class _CustomerProfileState extends State<CustomerProfile> {
                         _buildStatsRow(),
                         const SizedBox(height: 28),
 
+                        // My Posts section
+                        Text("My Posts", style: AppTextStyles.h4),
+                        const SizedBox(height: 16),
+                        _buildMyPostsSection(),
+                        const SizedBox(height: 28),
+
                         Text("Account Settings", style: AppTextStyles.h4),
                         const SizedBox(height: 16),
                         _buildSettingsTile(
@@ -450,6 +456,340 @@ class _CustomerProfileState extends State<CustomerProfile> {
         ],
       ),
     );
+  }
+
+  Widget _buildMyPostsSection() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+          boxShadow: AppShadows.soft,
+        ),
+        child: Text(
+          'Please log in to view your posts',
+          style: AppTextStyles.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: user.uid)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.image_not_supported_outlined,
+                  size: 48,
+                  color: AppColors.textTertiary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No posts yet',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final posts = snapshot.data!.docs;
+
+        return Column(
+          children: [...posts.map((post) => _buildPostItem(post)).toList()],
+        );
+      },
+    );
+  }
+
+  Widget _buildPostItem(DocumentSnapshot post) {
+    final data = post.data() as Map<String, dynamic>;
+    final mediaUrls = data['mediaUrls'] as List<dynamic>? ?? [];
+    final videoUrl = data['videoUrl'] as String?;
+    final content = data['content'] as String? ?? '';
+    final timestamp = data['timestamp'] as Timestamp?;
+    final postType = data['postType'] as String? ?? 'image';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        boxShadow: AppShadows.soft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Media preview
+          if (postType == 'video' && videoUrl != null && videoUrl.isNotEmpty)
+            Container(
+              width: double.infinity,
+              height: 150,
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(AppBorderRadius.lg),
+                  topRight: Radius.circular(AppBorderRadius.lg),
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(Icons.videocam, size: 50, color: AppColors.primary),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                      ),
+                      child: Text(
+                        'VIDEO',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (mediaUrls.isNotEmpty)
+            SizedBox(
+              width: double.infinity,
+              height: 150,
+              child: Image.network(
+                mediaUrls[0],
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: AppColors.surfaceVariant,
+                    child: Center(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+          // Post content
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Caption
+                if (content.isNotEmpty)
+                  Text(
+                    content,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.bodyMedium,
+                  ),
+
+                if (content.isNotEmpty) const SizedBox(height: 12),
+
+                // Post info row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          timestamp != null
+                              ? _formatDate(timestamp.toDate())
+                              : 'Unknown date',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.favorite_outline,
+                              size: 14,
+                              color: AppColors.textTertiary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${data['likeCount'] ?? 0}',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () => _showDeleteConfirmation(post.id),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.sm,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.delete_outline,
+                              size: 16,
+                              color: AppColors.error,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Delete',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.error,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays == 0) {
+      if (difference.inHours == 0) {
+        return '${difference.inMinutes}m ago';
+      }
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+    }
+  }
+
+  void _showDeleteConfirmation(String postId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        ),
+        title: Text(
+          'Delete Post',
+          style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Are you sure you want to delete this post? This action cannot be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              _deletePost(postId);
+              Navigator.pop(context);
+            },
+            child: Text(
+              'Delete',
+              style: AppTextStyles.buttonMedium.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deletePost(String postId) async {
+    try {
+      await FirebaseFirestore.instance.collection('posts').doc(postId).delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Post deleted successfully'),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error deleting post: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Failed to delete post'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildStatItem(String value, String label) {
