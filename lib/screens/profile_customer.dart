@@ -16,12 +16,14 @@ class CustomerProfile extends StatefulWidget {
 class _CustomerProfileState extends State<CustomerProfile> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  late Map<String, int> _carouselIndices = {};
 
   String _displayName = "Loading...";
   String? _photoUrl;
   String _userRole = "Member";
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _showAccountSettings = false;
 
   @override
   void initState() {
@@ -272,38 +274,66 @@ class _CustomerProfileState extends State<CustomerProfile> {
                         _buildMyPostsSection(),
                         const SizedBox(height: 28),
 
-                        Text("Account Settings", style: AppTextStyles.h4),
-                        const SizedBox(height: 16),
-                        _buildSettingsTile(
-                          Icons.person_outline,
-                          "Username",
-                          _usernameController.text.isEmpty
-                              ? "Set your username"
-                              : _usernameController.text,
-                          onTap: () => _showEditUsernameDialog(),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildSettingsTile(
-                          Icons.lock_outline,
-                          "Password",
-                          "••••••••",
-                          onTap: _showPasswordModal,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildSettingsTile(
-                          Icons.notifications_outlined,
-                          "Notifications",
-                          "Manage your preferences",
-                          onTap: () {},
+                        // Account Settings (Collapsible)
+                        GestureDetector(
+                          onTap: () => setState(
+                            () => _showAccountSettings = !_showAccountSettings,
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(
+                                AppBorderRadius.md,
+                              ),
+                              boxShadow: AppShadows.soft,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Account Settings",
+                                  style: AppTextStyles.bodyLarge.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Icon(
+                                  _showAccountSettings
+                                      ? Icons.expand_less
+                                      : Icons.expand_more,
+                                  color: AppColors.primary,
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
 
-                        const SizedBox(height: 28),
-                        Text("Style Bio", style: AppTextStyles.h4),
-                        const SizedBox(height: 16),
-                        _buildDescriptionBox(),
-
-                        const SizedBox(height: 32),
-                        _buildSaveButton(),
+                        // Account Settings Content
+                        if (_showAccountSettings) ...[
+                          const SizedBox(height: 12),
+                          _buildSettingsTile(
+                            Icons.person_outline,
+                            "Username",
+                            _usernameController.text.isEmpty
+                                ? "Set your username"
+                                : _usernameController.text,
+                            onTap: () => _showEditUsernameDialog(),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildSettingsTile(
+                            Icons.lock_outline,
+                            "Password",
+                            "••••••••",
+                            onTap: _showPasswordModal,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildSettingsTile(
+                            Icons.notifications_outlined,
+                            "Notifications",
+                            "Manage your preferences",
+                            onTap: () {},
+                          ),
+                        ],
 
                         const SizedBox(height: 20),
                         _buildLogoutButton(),
@@ -328,14 +358,14 @@ class _CustomerProfileState extends State<CustomerProfile> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top row with back and settings
+              // Top bar with title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const SizedBox(width: 40),
                   Text(
                     "My Profile",
                     style: AppTextStyles.h4.copyWith(color: Colors.white),
@@ -346,94 +376,173 @@ class _CustomerProfileState extends State<CustomerProfile> {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(AppBorderRadius.sm),
                     ),
-                    child: const Icon(
-                      Icons.edit_outlined,
-                      color: Colors.white,
-                      size: 20,
+                    child: GestureDetector(
+                      onTap: _showEditProfileDialog,
+                      child: const Icon(
+                        Icons.edit_outlined,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
 
-              // Profile picture
-              Stack(
+              // Profile section with picture and info
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: AppShadows.medium,
-                    ),
-                    child: CircleAvatar(
-                      radius: 55,
-                      backgroundColor: AppColors.surfaceVariant,
-                      backgroundImage: _photoUrl != null
-                          ? (_photoUrl!.startsWith('http')
-                                ? NetworkImage(_photoUrl!)
-                                : FileImage(File(_photoUrl!)) as ImageProvider)
-                          : null,
-                      child: _photoUrl == null
-                          ? const Icon(
-                              Icons.person,
-                              size: 50,
-                              color: AppColors.textTertiary,
-                            )
-                          : null,
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: GestureDetector(
-                      onTap: _pickImage,
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
+                  // Profile picture
+                  Stack(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: AppColors.secondary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt,
-                          size: 18,
                           color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: AppShadows.medium,
+                        ),
+                        child: CircleAvatar(
+                          radius: 45,
+                          backgroundColor: AppColors.surfaceVariant,
+                          backgroundImage: _photoUrl != null
+                              ? (_photoUrl!.startsWith('http')
+                                    ? NetworkImage(_photoUrl!)
+                                    : FileImage(File(_photoUrl!))
+                                          as ImageProvider)
+                              : null,
+                          child: _photoUrl == null
+                              ? const Icon(
+                                  Icons.person,
+                                  size: 40,
+                                  color: AppColors.textTertiary,
+                                )
+                              : null,
                         ),
                       ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: _pickImage,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: const Icon(
+                              Icons.camera_alt,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 20),
+
+                  // User info and stats
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Name
+                        Text(
+                          _displayName,
+                          style: AppTextStyles.h3.copyWith(
+                            color: Colors.white,
+                            fontSize: 24,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+
+                        // Role badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.xl,
+                            ),
+                          ),
+                          child: Text(
+                            _userRole,
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Stats row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            _buildHeaderStatItem("0", "Posts"),
+                            const SizedBox(width: 20),
+                            _buildHeaderStatItem("0", "Followers"),
+                            const SizedBox(width: 20),
+                            _buildHeaderStatItem("0", "Following"),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
 
-              // Name and role
-              Text(
-                _displayName,
-                style: AppTextStyles.h3.copyWith(color: Colors.white),
-              ),
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
+              // Bio section
+              if (_descriptionController.text.isNotEmpty)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _descriptionController.text,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.white,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppBorderRadius.xl),
-                ),
-                child: Text(
-                  _userRole,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeaderStatItem(String count, String label) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: AppTextStyles.h4.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: Colors.white.withOpacity(0.9),
+          ),
+        ),
+      ],
     );
   }
 
@@ -483,6 +592,30 @@ class _CustomerProfileState extends State<CustomerProfile> {
           .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          debugPrint('Error loading posts: ${snapshot.error}');
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                const SizedBox(height: 12),
+                Text(
+                  'Error loading posts',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(
             child: CircularProgressIndicator(color: AppColors.primary),
@@ -584,25 +717,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
               ),
             )
           else if (mediaUrls.isNotEmpty)
-            SizedBox(
-              width: double.infinity,
-              height: 150,
-              child: Image.network(
-                mediaUrls[0],
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    color: AppColors.surfaceVariant,
-                    child: Center(
-                      child: Icon(
-                        Icons.image_not_supported_outlined,
-                        color: AppColors.textTertiary,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
+            _buildProfileImageCarousel(post.id, mediaUrls),
 
           // Post content
           Padding(
@@ -756,6 +871,68 @@ class _CustomerProfileState extends State<CustomerProfile> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProfileImageCarousel(String postId, List<dynamic> mediaUrls) {
+    final imageUrls = mediaUrls.cast<String>();
+
+    return Stack(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 150,
+          child: PageView.builder(
+            onPageChanged: (index) {
+              setState(() {
+                _carouselIndices[postId] = index;
+              });
+            },
+            itemCount: imageUrls.length,
+            itemBuilder: (context, index) {
+              return ClipRRect(
+                child: Image.network(
+                  imageUrls[index],
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: 150,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: AppColors.surfaceVariant,
+                      child: Center(
+                        child: Icon(
+                          Icons.image_not_supported_outlined,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        // Image counter badge (only show if multiple images)
+        if (imageUrls.length > 1)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.textPrimary.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+              ),
+              child: Text(
+                '${(_carouselIndices[postId] ?? 0) + 1}/${imageUrls.length}',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -958,6 +1135,77 @@ class _CustomerProfileState extends State<CustomerProfile> {
           "Log Out",
           style: AppTextStyles.buttonMedium.copyWith(color: AppColors.error),
         ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        ),
+        title: Text("Edit Profile", style: AppTextStyles.h4),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Style Bio field
+              Text(
+                "Style Bio",
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 3,
+                maxLength: 150,
+                decoration: InputDecoration(
+                  hintText: "Write your style bio...",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                    borderSide: BorderSide(color: AppColors.primary),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                    borderSide: BorderSide(color: AppColors.primary, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              "Cancel",
+              style: AppTextStyles.buttonMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              _saveProfile();
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+              ),
+            ),
+            child: Text(
+              "Save",
+              style: AppTextStyles.buttonMedium.copyWith(color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }

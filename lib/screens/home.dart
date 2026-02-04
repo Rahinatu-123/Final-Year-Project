@@ -206,8 +206,15 @@ class _UniversalHomeState extends State<UniversalHome> {
 }
 
 // --- THE HOME FEED PAGE ---
-class HomeFeedPage extends StatelessWidget {
+class HomeFeedPage extends StatefulWidget {
   const HomeFeedPage({super.key});
+
+  @override
+  State<HomeFeedPage> createState() => _HomeFeedPageState();
+}
+
+class _HomeFeedPageState extends State<HomeFeedPage> {
+  late Map<String, int> _carouselIndices = {};
 
   void _toggleLike(String postId, List likes) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -495,67 +502,14 @@ class HomeFeedPage extends StatelessWidget {
                     Icons.more_horiz,
                     color: AppColors.textTertiary,
                   ),
-                  onPressed: () {},
+                  onPressed: () => _showPostMenu(post, docId),
                 ),
               ],
             ),
           ),
 
-          // Image
-          ClipRRect(
-            child: Image.network(
-              (post['mediaUrls'] as List?)?.isNotEmpty == true
-                  ? post['mediaUrls'][0]
-                  : '',
-              height: 350,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
-                  height: 350,
-                  color: AppColors.surfaceVariant,
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                          : null,
-                      color: AppColors.primary,
-                      strokeWidth: 2,
-                    ),
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                debugPrint('Image load error: $error');
-                debugPrint('Image URL: ${post['mediaUrls']?[0]}');
-                return Container(
-                  height: 350,
-                  color: AppColors.surfaceVariant,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.image_not_supported,
-                          size: 48,
-                          color: AppColors.textTertiary,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Image unavailable',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
+          // Image carousel
+          _buildImageCarousel(post),
 
           // Actions
           Padding(
@@ -619,6 +573,127 @@ class HomeFeedPage extends StatelessWidget {
     );
   }
 
+  Widget _buildImageCarousel(Map<String, dynamic> post) {
+    final mediaUrls = (post['mediaUrls'] as List?)?.cast<String>() ?? [];
+    final postId = post['userId'];
+
+    if (mediaUrls.isEmpty) {
+      return Container(
+        height: 350,
+        color: AppColors.surfaceVariant,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.image_not_supported,
+                size: 48,
+                color: AppColors.textTertiary,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Image unavailable',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        SizedBox(
+          height: 350,
+          width: double.infinity,
+          child: PageView.builder(
+            onPageChanged: (index) {
+              setState(() {
+                _carouselIndices[postId] = index;
+              });
+            },
+            itemCount: mediaUrls.length,
+            itemBuilder: (context, index) {
+              return ClipRRect(
+                child: Image.network(
+                  mediaUrls[index],
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: 350,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Container(
+                      height: 350,
+                      color: AppColors.surfaceVariant,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                              : null,
+                          color: AppColors.primary,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    debugPrint('Image load error: $error');
+                    return Container(
+                      height: 350,
+                      color: AppColors.surfaceVariant,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.image_not_supported,
+                              size: 48,
+                              color: AppColors.textTertiary,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Image unavailable',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        // Image counter badge (only show if multiple images)
+        if (mediaUrls.length > 1)
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.textPrimary.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(AppBorderRadius.md),
+              ),
+              child: Text(
+                '${(_carouselIndices[postId] ?? 0) + 1}/${mediaUrls.length}',
+                style: AppTextStyles.labelMedium.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildActionButton({
     required IconData icon,
     required Color color,
@@ -643,5 +718,142 @@ class HomeFeedPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _showPostMenu(Map<String, dynamic> post, String postId) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final postUserId = post['userId'];
+    final isPostOwner = currentUserId == postUserId;
+
+    if (!isPostOwner) {
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppBorderRadius.lg),
+        ),
+      ),
+      backgroundColor: AppColors.surface,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.textTertiary.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                  _showDeleteConfirmation(postId);
+                },
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_outline,
+                      color: AppColors.error,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      'Delete Post',
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        color: AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(String postId) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+        ),
+        title: Text(
+          'Delete Post',
+          style: AppTextStyles.h4.copyWith(color: AppColors.textPrimary),
+        ),
+        content: Text(
+          'Are you sure you want to delete this post? This action cannot be undone.',
+          style: AppTextStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: AppTextStyles.buttonMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              _deletePost(postId);
+              Navigator.pop(context);
+            },
+            child: Text(
+              'Delete',
+              style: AppTextStyles.buttonMedium.copyWith(
+                color: AppColors.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deletePost(String postId) async {
+    try {
+      await FirebaseFirestore.instance.collection('posts').doc(postId).delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Post deleted successfully'),
+          backgroundColor: AppColors.primary,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error deleting post: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to delete post'),
+          backgroundColor: AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+          ),
+        ),
+      );
+    }
   }
 }
