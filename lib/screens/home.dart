@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
+import 'package:share_plus/share_plus.dart';
 import 'create_post_screen.dart';
 import 'customer_dashboard.dart';
 import 'profile_customer.dart';
@@ -32,6 +33,122 @@ class _UniversalHomeState extends State<UniversalHome> {
       body: IndexedStack(index: _currentIndex, children: _pages),
       floatingActionButton: _currentIndex == 0 ? _buildFAB() : null,
       bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  void _sharePost(Map<String, dynamic> post) {
+    final media = (post['mediaUrls'] as List?)?.cast<String>() ?? [];
+    final content = post['content'] ?? '';
+    final url = media.isNotEmpty ? media.first : '';
+    final text = content.isNotEmpty ? '$content\n$url' : url;
+    if (text.isNotEmpty) Share.share(text);
+  }
+
+  void _showComments(String postId, Map<String, dynamic> post) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        final TextEditingController _commentController =
+            TextEditingController();
+        return Padding(
+          padding: MediaQuery.of(context).viewInsets,
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Comments', style: AppTextStyles.h4),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('posts')
+                        .doc(postId)
+                        .collection('comments')
+                        .orderBy('createdAt', descending: true)
+                        .snapshots(),
+                    builder: (context, snap) {
+                      if (!snap.hasData) return const SizedBox.shrink();
+                      final docs = snap.data!.docs;
+                      return ListView.builder(
+                        reverse: true,
+                        itemCount: docs.length,
+                        itemBuilder: (context, idx) {
+                          final c = docs[idx].data() as Map<String, dynamic>;
+                          return ListTile(
+                            leading: const CircleAvatar(
+                              child: Icon(Icons.person),
+                            ),
+                            title: Text(c['authorName'] ?? 'User'),
+                            subtitle: Text(c['text'] ?? ''),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _commentController,
+                          decoration: const InputDecoration(
+                            hintText: 'Write a comment...',
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: () async {
+                          final text = _commentController.text.trim();
+                          if (text.isEmpty) return;
+                          final user = FirebaseAuth.instance.currentUser;
+                          await FirebaseFirestore.instance
+                              .collection('posts')
+                              .doc(postId)
+                              .collection('comments')
+                              .add({
+                                'text': text,
+                                'authorId': user?.uid,
+                                'authorName': user?.displayName ?? 'User',
+                                'createdAt': Timestamp.now(),
+                              });
+
+                          // increment commentCount on post
+                          await FirebaseFirestore.instance
+                              .collection('posts')
+                              .doc(postId)
+                              .update({
+                                'commentCount': FieldValue.increment(1),
+                              });
+
+                          _commentController.clear();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -529,14 +646,14 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     _buildActionButton(
                       icon: Icons.chat_bubble_outline,
                       color: AppColors.textPrimary,
-                      count: 0,
-                      onTap: () {},
+                      count: post['commentCount'] ?? 0,
+                      onTap: () => _showComments(docId, post),
                     ),
                     const SizedBox(width: 20),
                     _buildActionButton(
                       icon: Icons.send_outlined,
                       color: AppColors.textPrimary,
-                      onTap: () {},
+                      onTap: () => _sharePost(post),
                     ),
                     const Spacer(),
                     IconButton(
@@ -854,6 +971,131 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
         ),
       );
+    }
+  }
+
+  // Show comments dialog for a post and allow adding a new comment
+  void _showComments(String postId, Map<String, dynamic> post) {
+    final TextEditingController _commentController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Comments', style: AppTextStyles.h4),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('posts')
+                      .doc(postId)
+                      .collection('comments')
+                      .orderBy('createdAt', descending: true)
+                      .snapshots(),
+                  builder: (context, snap) {
+                    if (snap.hasError) {
+                      return Center(child: Text('Error loading comments'));
+                    }
+                    if (!snap.hasData)
+                      return const Center(child: CircularProgressIndicator());
+                    final docs = snap.data!.docs;
+                    if (docs.isEmpty)
+                      return Center(child: Text('No comments yet'));
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: docs.length,
+                      itemBuilder: (context, idx) {
+                        final c = docs[idx].data() as Map<String, dynamic>;
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            c['authorName'] ?? 'User',
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                          subtitle: Text(c['content'] ?? ''),
+                          trailing: Text(
+                            c['createdAt'] != null
+                                ? _formatRelativeTime(
+                                    (c['createdAt'] as Timestamp).toDate(),
+                                  )
+                                : '',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.textTertiary,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      decoration: const InputDecoration(
+                        hintText: 'Add a comment',
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send_outlined),
+                    onPressed: () async {
+                      final text = _commentController.text.trim();
+                      if (text.isEmpty) return;
+                      final user = FirebaseAuth.instance.currentUser;
+                      final commentRef = FirebaseFirestore.instance
+                          .collection('posts')
+                          .doc(postId)
+                          .collection('comments')
+                          .doc();
+                      await commentRef.set({
+                        'authorId': user?.uid,
+                        'authorName': user?.displayName ?? 'User',
+                        'content': text,
+                        'createdAt': Timestamp.now(),
+                      });
+                      // increment commentCount on post doc
+                      await FirebaseFirestore.instance
+                          .collection('posts')
+                          .doc(postId)
+                          .update({'commentCount': FieldValue.increment(1)});
+                      _commentController.clear();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Share a post using share_plus (shares text + first media URL if available)
+  void _sharePost(Map<String, dynamic> post) {
+    final content = post['content'] ?? '';
+    final media = (post['mediaUrls'] as List?)?.cast<String>() ?? [];
+    final url = media.isNotEmpty ? media.first : null;
+    final shareText = url != null ? '$content\n\n$url' : content;
+    try {
+      Share.share(shareText.isNotEmpty ? shareText : 'Check out this post');
+    } catch (e) {
+      debugPrint('Share failed: $e');
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Failed to share post')));
     }
   }
 }

@@ -264,10 +264,6 @@ class _CustomerProfileState extends State<CustomerProfile> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Stats row
-                        _buildStatsRow(),
-                        const SizedBox(height: 28),
-
                         // My Posts section
                         Text("My Posts", style: AppTextStyles.h4),
                         const SizedBox(height: 16),
@@ -484,15 +480,85 @@ class _CustomerProfileState extends State<CustomerProfile> {
                         ),
                         const SizedBox(height: 12),
 
-                        // Stats row
+                        // Stats row (Posts, Followers, Following)
                         Row(
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            _buildHeaderStatItem("0", "Posts"),
+                            // Posts count
+                            StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseAuth.instance.currentUser != null
+                                  ? FirebaseFirestore.instance
+                                        .collection('posts')
+                                        .where(
+                                          'userId',
+                                          isEqualTo: FirebaseAuth
+                                              .instance
+                                              .currentUser!
+                                              .uid,
+                                        )
+                                        .snapshots()
+                                  : const Stream.empty(),
+                              builder: (context, snap) {
+                                final postCount = snap.hasData
+                                    ? snap.data!.docs.length
+                                    : 0;
+                                return _buildHeaderStatItem(
+                                  postCount.toString(),
+                                  "Posts",
+                                );
+                              },
+                            ),
                             const SizedBox(width: 20),
-                            _buildHeaderStatItem("0", "Followers"),
-                            const SizedBox(width: 20),
-                            _buildHeaderStatItem("0", "Following"),
+
+                            // Followers & Following counts from user doc
+                            StreamBuilder<DocumentSnapshot>(
+                              stream: FirebaseAuth.instance.currentUser != null
+                                  ? FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(
+                                          FirebaseAuth
+                                              .instance
+                                              .currentUser!
+                                              .uid,
+                                        )
+                                        .snapshots()
+                                  : const Stream.empty(),
+                              builder: (context, userSnap) {
+                                int followers = 0;
+                                int following = 0;
+                                if (userSnap.hasData && userSnap.data != null) {
+                                  final data =
+                                      userSnap.data!.data()
+                                          as Map<String, dynamic>?;
+                                  if (data != null) {
+                                    followers = (data['followersCount'] is int)
+                                        ? data['followersCount'] as int
+                                        : (data['followers'] is List)
+                                        ? (data['followers'] as List).length
+                                        : 0;
+                                    following = (data['followingCount'] is int)
+                                        ? data['followingCount'] as int
+                                        : (data['following'] is List)
+                                        ? (data['following'] as List).length
+                                        : 0;
+                                  }
+                                }
+
+                                return Row(
+                                  children: [
+                                    _buildHeaderStatItem(
+                                      followers.toString(),
+                                      'Followers',
+                                    ),
+                                    const SizedBox(width: 20),
+                                    _buildHeaderStatItem(
+                                      following.toString(),
+                                      'Following',
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ],
@@ -583,7 +649,6 @@ class _CustomerProfileState extends State<CustomerProfile> {
       stream: FirebaseFirestore.instance
           .collection('posts')
           .where('userId', isEqualTo: user.uid)
-          .orderBy('timestamp', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -643,7 +708,17 @@ class _CustomerProfileState extends State<CustomerProfile> {
           );
         }
 
-        final posts = snapshot.data!.docs;
+        // Collect docs and sort them by timestamp (descending) client-side
+        final posts = snapshot.data!.docs.map((doc) => doc).toList()
+          ..sort((a, b) {
+            final aTs =
+                (a.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+            final bTs =
+                (b.data() as Map<String, dynamic>)['timestamp'] as Timestamp?;
+            final aMillis = aTs?.millisecondsSinceEpoch ?? 0;
+            final bMillis = bTs?.millisecondsSinceEpoch ?? 0;
+            return bMillis.compareTo(aMillis); // newest first
+          });
 
         return Column(
           children: [...posts.map((post) => _buildPostItem(post)).toList()],
