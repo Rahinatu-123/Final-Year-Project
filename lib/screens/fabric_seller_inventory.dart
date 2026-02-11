@@ -256,7 +256,17 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
                     color: Colors.grey[200],
                   ),
                   child: fabric.imageUrls.isNotEmpty
-                      ? Image.network(fabric.imageUrls[0], fit: BoxFit.cover)
+                      ? Image.network(
+                          fabric.imageUrls[0],
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                                color: Colors.grey[200],
+                                child: const Center(
+                                  child: Icon(Icons.image_not_supported),
+                                ),
+                              ),
+                        )
                       : const Center(child: Icon(Icons.image_not_supported)),
                 ),
                 // Stock Status Badge
@@ -320,7 +330,14 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
             color: Colors.grey[200],
           ),
           child: fabric.imageUrls.isNotEmpty
-              ? Image.network(fabric.imageUrls[0], fit: BoxFit.cover)
+              ? Image.network(
+                  fabric.imageUrls[0],
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.grey[200],
+                    child: const Center(child: Icon(Icons.image_not_supported)),
+                  ),
+                )
               : const Center(child: Icon(Icons.image_not_supported)),
         ),
         title: Text(fabric.color),

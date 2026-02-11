@@ -69,11 +69,25 @@ class _SignupPageState extends State<SignupPage> {
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
+        'email': email,
         'firstName': firstName,
         'lastName': lastName,
         'fullName': '$firstName $lastName',
-        'email': email,
         'role': _selectedRole,
+
+        // 👇 Add default business fields for all users
+        'businessName': '',
+        'businessAddress': '',
+        'businessPhone': '',
+        'businessEmail': '',
+        'businessLatitude': null,
+        'businessLongitude': null,
+        'businessHours': '',
+        'businessServices': [],
+        'businessWebsite': '',
+
+        'followersCount': 0,
+        'followingCount': 0,
         'createdAt': FieldValue.serverTimestamp(),
       });
 

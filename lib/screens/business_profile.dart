@@ -281,6 +281,12 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
               child: Image.network(
                 _profile!.bannerImageUrl!,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: AppColors.surfaceVariant,
+                  child: const Center(
+                    child: Icon(Icons.image_not_supported, size: 48),
+                  ),
+                ),
               ),
             )
           : Center(

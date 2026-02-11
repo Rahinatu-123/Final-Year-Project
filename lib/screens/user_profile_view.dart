@@ -88,10 +88,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
         ).showSnackBar(const SnackBar(content: Text('Disconnected')));
         setState(() {
           _isConnected = false;
-          if (_userData != null && _userData!['followersCount'] is int) {
-            _userData!['followersCount'] =
-                (_userData!['followersCount'] as int) - 1;
-          }
         });
       }
     } else {
@@ -118,10 +114,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
         ).showSnackBar(const SnackBar(content: Text('Connected')));
         setState(() {
           _isConnected = true;
-          if (_userData != null && _userData!['followersCount'] is int) {
-            _userData!['followersCount'] =
-                (_userData!['followersCount'] as int) + 1;
-          }
         });
       }
     }
@@ -166,33 +158,83 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 8),
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      (_userData?['followersCount'] ?? 0)
-                                          .toString(),
+                              StreamBuilder<DocumentSnapshot>(
+                                stream: FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(widget.uid)
+                                    .snapshots(),
+                                builder: (context, userSnap) {
+                                  int followers = 0;
+                                  int following = 0;
+                                  if (userSnap.hasData &&
+                                      userSnap.data != null) {
+                                    final data =
+                                        userSnap.data!.data()
+                                            as Map<String, dynamic>?;
+                                    if (data != null) {
+                                      followers =
+                                          (data['followersCount'] is int)
+                                          ? data['followersCount'] as int
+                                          : (data['followers'] is List)
+                                          ? (data['followers'] as List).length
+                                          : 0;
+                                      following =
+                                          (data['followingCount'] is int)
+                                          ? data['followingCount'] as int
+                                          : (data['following'] is List)
+                                          ? (data['following'] as List).length
+                                          : 0;
+                                    }
+                                  }
+
+                                  return SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          followers.toString(),
+                                          style: AppTextStyles.bodyLarge
+                                              .copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Text('Followers'),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          following.toString(),
+                                          style: AppTextStyles.bodyLarge
+                                              .copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        const Text('Following'),
+                                      ],
                                     ),
-                                    const SizedBox(width: 4),
-                                    const Text('Followers'),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      (_userData?['followingCount'] ?? 0)
-                                          .toString(),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Text('Following'),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _toggleFollow,
-                          child: Text(_isConnected ? 'Disconnect' : 'Connect'),
+                        Container(
+                          height: 36,
+                          child: ElevatedButton(
+                            onPressed: _toggleFollow,
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              minimumSize: const Size(80, 36),
+                              textStyle: AppTextStyles.labelSmall,
+                            ),
+                            child: Text(
+                              _isConnected ? 'Disconnect' : 'Connect',
+                            ),
+                          ),
                         ),
                       ],
                     ),

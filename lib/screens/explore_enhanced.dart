@@ -188,6 +188,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       child: Image.network(
                         tailor.bannerImageUrl!,
                         fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: AppColors.surfaceVariant,
+                          child: const Center(
+                            child: Icon(Icons.image_not_supported, size: 48),
+                          ),
+                        ),
                       ),
                     )
                   : Center(

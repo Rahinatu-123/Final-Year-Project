@@ -564,6 +564,46 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                                 width: 120,
                                                 height: 120,
                                                 fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  debugPrint(
+                                                    'Image load error for file: ${file.path}',
+                                                  );
+                                                  debugPrint('Error: $error');
+                                                  return Container(
+                                                    width: 120,
+                                                    height: 120,
+                                                    color: AppColors
+                                                        .surfaceVariant,
+                                                    child: Center(
+                                                      child: Column(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .center,
+                                                        children: [
+                                                          Icon(
+                                                            Icons
+                                                                .image_not_supported,
+                                                            size: 32,
+                                                            color: AppColors
+                                                                .textTertiary,
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 4,
+                                                          ),
+                                                          Text(
+                                                            'Error',
+                                                            style: AppTextStyles
+                                                                .labelSmall
+                                                                .copyWith(
+                                                                  color: AppColors
+                                                                      .textTertiary,
+                                                                ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
                                               ),
                                       ),
                                       Positioned(

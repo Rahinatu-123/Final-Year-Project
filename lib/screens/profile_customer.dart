@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:fashionhub/screens/business_profile.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../theme/app_theme.dart';
 import 'landing_page.dart';
+import 'create_post_screen.dart';
 
 class CustomerProfile extends StatefulWidget {
   const CustomerProfile({super.key});
@@ -26,6 +28,14 @@ class _CustomerProfileState extends State<CustomerProfile> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _showAccountSettings = false;
+
+  // Business profile data for tailors/seamstresses
+  String? _businessName;
+  String? _businessAddress;
+  String? _businessPhone;
+  String? _businessEmail;
+  double? _businessLatitude;
+  double? _businessLongitude;
 
   @override
   void initState() {
@@ -50,6 +60,18 @@ class _CustomerProfileState extends State<CustomerProfile> {
             _descriptionController.text = data['description'] ?? "";
             _displayName = data['username'] ?? data['fullName'] ?? "User";
             _userRole = data['role'] ?? "Member";
+
+            // Load business profile data for tailors/seamstresses
+            if (_userRole.toLowerCase().contains('tailor') ||
+                _userRole.toLowerCase().contains('seamstress')) {
+              _businessName = data['businessName'];
+              _businessAddress = data['businessAddress'];
+              _businessPhone = data['businessPhone'];
+              _businessEmail = data['businessEmail'];
+              _businessLatitude = data['businessLatitude']?.toDouble();
+              _businessLongitude = data['businessLongitude']?.toDouble();
+            }
+
             // Try to get profile picture from Cloudinary first, then fall back to Auth
             _photoUrl = data['profilePictureUrl'] ?? user.photoURL;
             _isLoading = false;
@@ -375,10 +397,23 @@ class _CustomerProfileState extends State<CustomerProfile> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // My Posts section
-                        Text("My Posts", style: AppTextStyles.h4),
+                        // Content section based on user role
+                        Text(
+                          _userRole.toLowerCase().contains('tailor') ||
+                                  _userRole.toLowerCase().contains('seamstress')
+                              ? "Business Portfolio"
+                              : "My Posts",
+                          style: AppTextStyles.h4,
+                        ),
                         const SizedBox(height: 16),
-                        _buildMyPostsSection(),
+
+                        // Show different content based on role
+                        if (_userRole.toLowerCase().contains('tailor') ||
+                            _userRole.toLowerCase().contains('seamstress'))
+                          _buildBusinessPortfolioSection()
+                        else
+                          _buildMyPostsSection(),
+
                         const SizedBox(height: 28),
 
                         // Account Settings (Collapsible)
@@ -677,6 +712,217 @@ class _CustomerProfileState extends State<CustomerProfile> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+
+              // Business Information Section (for tailors/seamstresses)
+              if ((_userRole.toLowerCase().contains('tailor') ||
+                      _userRole.toLowerCase().contains('seamstress')) &&
+                  (_businessName != null || _businessAddress != null))
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                    boxShadow: AppShadows.soft,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.business,
+                                color: AppColors.primary,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Business Information',
+                                style: AppTextStyles.h4.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Business Details',
+                            style: AppTextStyles.h4.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Business Name
+                      if (_businessName != null &&
+                          _businessName!.isNotEmpty) ...[
+                        Text(
+                          'Business Name',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _businessName!,
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Business Address
+                      if (_businessAddress != null &&
+                          _businessAddress!.isNotEmpty) ...[
+                        Text(
+                          'Address',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(_businessAddress!, style: AppTextStyles.bodyLarge),
+                        const SizedBox(height: 12),
+                      ],
+
+                      // Business Contact Info
+                      if ((_businessPhone != null &&
+                              _businessPhone!.isNotEmpty) ||
+                          (_businessEmail != null &&
+                              _businessEmail!.isNotEmpty)) ...[
+                        Text(
+                          'Contact',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_businessPhone != null &&
+                            _businessPhone!.isNotEmpty)
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.phone,
+                                size: 16,
+                                color: AppColors.textSecondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _businessPhone!,
+                                style: AppTextStyles.bodyMedium,
+                              ),
+                            ],
+                          ),
+                        if (_businessEmail != null &&
+                            _businessEmail!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.email,
+                                  size: 16,
+                                  color: AppColors.textSecondary,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _businessEmail!,
+                                    style: AppTextStyles.bodyMedium,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Location Map (if coordinates available)
+                      if (_businessLatitude != null &&
+                          _businessLongitude != null)
+                        Container(
+                          height: 200,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.md,
+                            ),
+                            border: Border.all(
+                              color: AppColors.textTertiary.withOpacity(0.3),
+                            ),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.md,
+                            ),
+                            child: Stack(
+                              children: [
+                                // Simple map placeholder
+                                Container(
+                                  color: AppColors.surfaceVariant,
+                                  child: Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.location_on,
+                                          size: 48,
+                                          color: AppColors.primary,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Business Location',
+                                          style: AppTextStyles.bodyMedium,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Lat: ${_businessLatitude!.toStringAsFixed(4)}, Lng: ${_businessLongitude!.toStringAsFixed(4)}',
+                                          style: AppTextStyles.labelSmall
+                                              .copyWith(
+                                                color: AppColors.textSecondary,
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary,
+                                      borderRadius: BorderRadius.circular(
+                                        AppBorderRadius.sm,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'MAP VIEW',
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
               const SizedBox(height: 16),
 
               // Bio section
@@ -1574,6 +1820,356 @@ class _CustomerProfileState extends State<CustomerProfile> {
           ),
         ],
       ),
+    );
+  }
+
+  // Business Portfolio Section for Tailors/Seamstresses
+  Widget _buildBusinessPortfolioSection() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+          boxShadow: AppShadows.soft,
+        ),
+        child: Text(
+          'Please log in to view your business portfolio',
+          style: AppTextStyles.bodyMedium,
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('posts')
+          .where('userId', isEqualTo: user.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          final error = snapshot.error;
+          debugPrint('Error loading portfolio: $error');
+          debugPrint('User UID: ${user.uid}');
+          debugPrint('User Role: $_userRole');
+          return Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.error_outline, size: 48, color: AppColors.error),
+                const SizedBox(height: 12),
+                Text(
+                  'Error loading portfolio',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Error: $error',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          debugPrint('Portfolio loading...');
+          return const Center(
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+
+        debugPrint('Portfolio connection state: ${snapshot.connectionState}');
+        final posts = snapshot.data?.docs ?? [];
+        debugPrint('Posts count: ${posts.length}');
+
+        if (posts.isEmpty) {
+          debugPrint('No posts found for user: ${user.uid}');
+          return Container(
+            padding: const EdgeInsets.all(40),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+              boxShadow: AppShadows.soft,
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.style_outlined, size: 64, color: AppColors.primary),
+                const SizedBox(height: 16),
+                Text(
+                  'Showcase Your Business',
+                  style: AppTextStyles.h3.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Share your designs and services to attract customers',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    // Edit Business Profile Button
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            // Navigate to business profile screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const BusinessProfileScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.edit),
+                          label: Text(
+                            'Edit Business',
+                            style: AppTextStyles.buttonMedium,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.secondary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppBorderRadius.md,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Add to Portfolio Button
+                    Expanded(
+                      child: SizedBox(
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            // Navigate to create post screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => CreatePostScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.add),
+                          label: Text(
+                            'Add Portfolio',
+                            style: AppTextStyles.buttonMedium,
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppBorderRadius.md,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: [
+            // Portfolio Stats
+            Container(
+              padding: const EdgeInsets.all(20),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                boxShadow: AppShadows.soft,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildPortfolioStatItem(posts.length.toString(), "Designs"),
+                  _buildPortfolioStatItem(
+                    posts
+                        .where((p) {
+                          final likesList = p['likes'] as List?;
+                          return likesList != null && likesList.isNotEmpty;
+                        })
+                        .length
+                        .toString(),
+                    "Popular",
+                  ),
+                ],
+              ),
+            ),
+
+            // Portfolio Grid
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: posts.length,
+              itemBuilder: (context, index) {
+                final post = posts[index].data() as Map<String, dynamic>;
+                final mediaUrls = post['mediaUrls'] as List? ?? [];
+                final likes = (post['likes'] as List?)?.length ?? 0;
+
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                    boxShadow: AppShadows.soft,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // Media
+                        if (mediaUrls.isNotEmpty)
+                          Positioned.fill(
+                            child: Image.network(
+                              mediaUrls.first,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                    color: AppColors.surfaceVariant,
+                                    child: const Icon(
+                                      Icons.image_not_supported,
+                                      color: AppColors.textTertiary,
+                                    ),
+                                  ),
+                            ),
+                          )
+                        else
+                          Container(
+                            color: AppColors.surfaceVariant,
+                            child: const Icon(
+                              Icons.style,
+                              color: AppColors.textTertiary,
+                              size: 48,
+                            ),
+                          ),
+
+                        // Overlay with likes and type
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.1),
+                                Colors.black.withOpacity(0.6),
+                              ],
+                              stops: const [0.3, 0.6, 1.0],
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Post type badge
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.coral,
+                                    borderRadius: BorderRadius.circular(
+                                      AppBorderRadius.sm,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    post['postType'] == 'video'
+                                        ? 'VIDEO'
+                                        : 'DESIGN',
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                // Likes
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.favorite,
+                                      size: 16,
+                                      color: Colors.white,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      likes.toString(),
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPortfolioStatItem(String count, String label) {
+    return Column(
+      children: [
+        Text(
+          count,
+          style: AppTextStyles.h4.copyWith(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 }

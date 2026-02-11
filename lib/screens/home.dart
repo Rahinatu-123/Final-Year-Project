@@ -26,6 +26,7 @@ class _UniversalHomeState extends State<UniversalHome> {
   @override
   void initState() {
     super.initState();
+    addBusinessFieldsToAllUsers();
     _loadUserRole();
   }
 
@@ -48,6 +49,31 @@ class _UniversalHomeState extends State<UniversalHome> {
       // keep default role
       debugPrint('Failed to load role: $e');
     }
+  }
+
+  Future<void> addBusinessFieldsToAllUsers() async {
+    final usersSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .get();
+
+    for (var userDoc in usersSnapshot.docs) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userDoc.id)
+          .update({
+            'businessName': '',
+            'businessAddress': '',
+            'businessPhone': '',
+            'businessEmail': '',
+            'businessLatitude': null,
+            'businessLongitude': null,
+            'businessHours': '',
+            'businessServices': [],
+            'businessWebsite': '',
+          });
+    }
+
+    print("All users updated!");
   }
 
   @override
