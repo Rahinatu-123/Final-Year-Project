@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow anyone to read users
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // Allow users to update their own profile
+      allow update: if request.auth != null && request.auth.uid == userId;
+
+      // Connections subcollection: user can create/delete their own connections
+      match /connections/{targetUid} {
+        allow create: if request.auth != null 
+                      && request.auth.uid == userId 
+                      && request.resource.data.userId == targetUid;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null;
+      }
+
+      // Followers subcollection: a follower can create/delete their own follower doc
+      match /followers/{followerId} {
+        allow create: if request.auth != null 
+                      && request.auth.uid == followerId 
+                      && request.resource.data.userId == followerId;
+        allow delete: if request.auth != null && request.auth.uid == followerId;
+        allow read: if true;
+      }
+    }
+
+    // Posts collection: anyone can read, authenticated users can create/edit their own
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Default: deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

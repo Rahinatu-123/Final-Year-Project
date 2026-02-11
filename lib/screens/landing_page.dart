@@ -57,7 +57,7 @@ class WelcomeScreen extends StatelessWidget {
 
               // --- Subtitle Text ---
               const Text(
-                "Generate precise measurements, visualize styles in 3D, and connect with world-class designers.",
+                "Generate precise measurements, visualize styles in 2D, and connect with world-class designers.",
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.grey, height: 1.5),
               ),

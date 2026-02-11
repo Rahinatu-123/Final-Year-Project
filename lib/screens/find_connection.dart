@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
+import 'user_profile_view.dart';
 
 class FindConnectionPage extends StatefulWidget {
   const FindConnectionPage({super.key});
@@ -11,16 +12,10 @@ class FindConnectionPage extends StatefulWidget {
 }
 
 class _FindConnectionPageState extends State<FindConnectionPage> {
-  String _selectedType = 'tailors'; // tailors, fabric_sellers, users
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
-
-  final List<Map<String, String>> _connectionTypes = [
-    {'value': 'tailors', 'label': 'Tailors'},
-    {'value': 'fabric_sellers', 'label': 'Fabric Sellers'},
-    {'value': 'users', 'label': 'Users'},
-  ];
+  Future<List<Map<String, dynamic>>>? _initialUsersFuture;
 
   @override
   void dispose() {
@@ -43,33 +38,13 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
     try {
       QuerySnapshot snapshot;
 
-      if (_selectedType == 'tailors') {
-        // Search in users collection where role is 'tailor'
-        snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .where('role', isEqualTo: 'tailor')
-            .where('username', isGreaterThanOrEqualTo: query)
-            .where('username', isLessThan: query + 'z')
-            .limit(20)
-            .get();
-      } else if (_selectedType == 'fabric_sellers') {
-        // Search in users collection where role is 'fabric_seller'
-        snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .where('role', isEqualTo: 'fabric_seller')
-            .where('username', isGreaterThanOrEqualTo: query)
-            .where('username', isLessThan: query + 'z')
-            .limit(20)
-            .get();
-      } else {
-        // Search in users collection for all users
-        snapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .where('username', isGreaterThanOrEqualTo: query)
-            .where('username', isLessThan: query + 'z')
-            .limit(20)
-            .get();
-      }
+      // Search across users collection by username prefix
+      snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('username', isGreaterThanOrEqualTo: query)
+          .where('username', isLessThan: query + 'z')
+          .limit(20)
+          .get();
 
       setState(() {
         _searchResults = snapshot.docs.map((doc) {
@@ -95,6 +70,30 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _fetchInitialUsers() async {
+    final current = FirebaseAuth.instance.currentUser;
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .get();
+
+    return snapshot.docs
+        .map((doc) {
+          final data = doc.data() as Map<String, dynamic>?;
+          return {
+            'uid': doc.id,
+            'name':
+                (data?['username'] ?? data?['fullName'] ?? 'Unknown') as String,
+            'email': (data?['email'] ?? '') as String,
+            'role': (data?['role'] ?? 'user') as String,
+            'profileImage': (data?['profileImage'] ?? '') as String,
+          };
+        })
+        .where((m) => m['uid'] != current?.uid)
+        .toList();
+  }
+
   Future<void> _connectWithUser(
     String targetUserId,
     String targetUserName,
@@ -109,11 +108,33 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
           .collection('connections')
           .doc(targetUserId);
 
+      final targetFollowerRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(targetUserId)
+          .collection('followers')
+          .doc(currentUser.uid);
+
       await connectionRef.set({
         'userId': targetUserId,
         'userName': targetUserName,
         'connectedAt': FieldValue.serverTimestamp(),
       });
+
+      // Add reciprocal follower doc and increment counts
+      await targetFollowerRef.set({
+        'userId': currentUser.uid,
+        'userName': currentUser.displayName ?? '',
+        'connectedAt': FieldValue.serverTimestamp(),
+      });
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(targetUserId)
+          .update({'followersCount': FieldValue.increment(1)});
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .update({'followingCount': FieldValue.increment(1)});
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -148,47 +169,7 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Connection Type Dropdown
-              Text(
-                'Who are you looking for?',
-                style: AppTextStyles.bodyLarge.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                  border: Border.all(color: AppColors.surfaceVariant, width: 1),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedType,
-                    isExpanded: true,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    items: _connectionTypes.map((type) {
-                      return DropdownMenuItem<String>(
-                        value: type['value'],
-                        child: Text(
-                          type['label']!,
-                          style: AppTextStyles.bodyMedium,
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          _selectedType = newValue;
-                          _searchResults = [];
-                          _searchController.clear();
-                        });
-                      }
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
+              // Removed role selector — simple search UI below
 
               // Search Bar
               Text(
@@ -204,18 +185,30 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
                   borderRadius: BorderRadius.circular(AppBorderRadius.md),
                   border: Border.all(color: AppColors.surfaceVariant, width: 1),
                 ),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Enter name...',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textTertiary,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Enter name...',
+                          hintStyle: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                        ),
+                      ),
                     ),
-                    border: InputBorder.none,
-                    prefixIcon: const Icon(Icons.search),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  onChanged: _performSearch,
+                    IconButton(
+                      icon: const Icon(Icons.search),
+                      onPressed: () =>
+                          _performSearch(_searchController.text.trim()),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -261,26 +254,54 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
                   ],
                 )
               else if (_searchController.text.isEmpty)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.search,
-                          size: 64,
-                          color: AppColors.textTertiary.withOpacity(0.3),
+                // When search is empty show recent users (like contacts)
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _initialUsersFuture ??= _fetchInitialUsers(),
+                  builder: (context, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Search to find connections',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textTertiary,
+                      );
+                    }
+                    final users = snap.data ?? [];
+                    if (users.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'No users found',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textTertiary,
+                            ),
                           ),
                         ),
+                      );
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Contacts',
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: users.length,
+                          itemBuilder: (context, index) {
+                            final user = users[index];
+                            return _buildUserResultCard(user);
+                          },
+                        ),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
             ],
           ),
@@ -364,9 +385,11 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
                 _connectWithUser(user['uid'], user['name']);
               } else if (value == 'profile') {
                 // Navigate to profile view
-                // You can implement this based on your profile page structure
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Viewing ${user['name']}\'s profile')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserProfilePage(uid: user['uid']),
+                  ),
                 );
               }
             },

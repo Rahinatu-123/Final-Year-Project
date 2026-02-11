@@ -43,6 +43,9 @@ class _LoginPageState extends State<LoginPage> {
           .signInWithEmailAndPassword(email: email, password: password);
 
       String uid = userCredential.user!.uid;
+      debugPrint(
+        'login: signInWithEmailAndPassword success uid=$uid email=${userCredential.user!.email}',
+      );
 
       DocumentSnapshot userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -51,9 +54,18 @@ class _LoginPageState extends State<LoginPage> {
 
       if (userDoc.exists) {
         if (mounted) {
-          Navigator.pushReplacement(
+          // Pop to root. If auth state doesn't propagate, navigate directly
+          debugPrint('login: userDoc found, popping to root');
+          try {
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          } catch (_) {}
+
+          // Fallback: push the home screen and remove all previous routes
+          debugPrint('login: navigating to UniversalHome (fallback)');
+          Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const UniversalHome()),
+            (route) => false,
           );
         }
       } else {

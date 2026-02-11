@@ -242,6 +242,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     final request = http.MultipartRequest('POST', url)
       ..fields['upload_preset'] = uploadPreset
+      ..fields['folder'] = 'fashionhub/posts'
+      ..fields['quality'] = 'auto'
+      ..fields['fetch_format'] = 'auto'
       ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
     final response = await request.send();
@@ -251,7 +254,35 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     final resStr = await response.stream.bytesToString();
     final resJson = json.decode(resStr);
-    return resJson['secure_url'];
+    final secureUrl = resJson['secure_url'] as String;
+
+    // Optimize URL with Cloudinary transformations for better loading
+    // Format: https://res.cloudinary.com/cloud_name/image/upload/c_fill,w_800,h_600,q_auto,f_auto/image_id
+    return _optimizeCloudinaryUrl(secureUrl);
+  }
+
+  String _optimizeCloudinaryUrl(String url) {
+    try {
+      // Convert standard Cloudinary URL to optimized URL with transformations
+      // Example: https://res.cloudinary.com/dr8f7af8z/image/upload/v1234/fashionhub/posts/file_id
+      // Becomes: https://res.cloudinary.com/dr8f7af8z/image/upload/c_fill,w_800,h_600,q_auto,f_auto,dpr_auto/v1234/fashionhub/posts/file_id
+      if (!url.contains('res.cloudinary.com')) {
+        return url;
+      }
+
+      // Insert transformations after /upload/
+      final parts = url.split('/upload/');
+      if (parts.length != 2) {
+        return url;
+      }
+
+      // Add quality and format optimizations
+      final transformations = 'c_fill,w_1000,h_800,q_auto,f_auto,dpr_auto';
+      return '${parts[0]}/upload/$transformations/${parts[1]}';
+    } catch (e) {
+      debugPrint('Error optimizing Cloudinary URL: $e');
+      return url;
+    }
   }
 
   Future<String> _uploadVideoToCloudinary(String videoPath) async {
@@ -264,6 +295,9 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
     final request = http.MultipartRequest('POST', url)
       ..fields['upload_preset'] = uploadPreset
+      ..fields['folder'] = 'fashionhub/videos'
+      ..fields['quality'] = 'auto'
+      ..fields['fetch_format'] = 'auto'
       ..files.add(await http.MultipartFile.fromPath('file', videoFile.path));
 
     final response = await request.send();

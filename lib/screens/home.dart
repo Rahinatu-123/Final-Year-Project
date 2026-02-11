@@ -7,6 +7,8 @@ import 'create_post_screen.dart';
 import 'customer_dashboard.dart';
 import 'profile_customer.dart';
 import 'explore.dart';
+import 'tailor_dashboard_enhanced.dart' as tailor_dashboard;
+import 'fabric_seller_dashboard.dart';
 
 class UniversalHome extends StatefulWidget {
   const UniversalHome({super.key});
@@ -18,22 +20,68 @@ class UniversalHome extends StatefulWidget {
 class _UniversalHomeState extends State<UniversalHome> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = [
-    const HomeFeedPage(),
-    const ExplorePage(),
-    const CustomerDashboard(),
-    const CustomerProfile(),
-  ];
+  String _role = 'customer';
+  String? _uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserRole();
+  }
+
+  Future<void> _loadUserRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _uid = user.uid;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_uid)
+          .get();
+      final data = doc.data();
+      if (data != null) {
+        setState(() {
+          _role = ((data['role'] ?? 'customer') as String).toLowerCase();
+        });
+      }
+    } catch (e) {
+      // keep default role
+      debugPrint('Failed to load role: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _currentIndex == 0 ? _buildAppBar() : null,
-      body: IndexedStack(index: _currentIndex, children: _pages),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          const HomeFeedPage(),
+          const ExplorePage(),
+          _buildDashboard(),
+          const CustomerProfile(),
+        ],
+      ),
       floatingActionButton: _currentIndex == 0 ? _buildFAB() : null,
       bottomNavigationBar: _buildBottomNav(),
     );
+  }
+
+  Widget _buildDashboard() {
+    // Return dashboard based on detected role
+    // Treat seamstress as a type of tailor
+    if (_role.contains('tailor') || _role.contains('seamstress')) {
+      return tailor_dashboard.TailorDashboardScreen(tailorId: _uid ?? '');
+    }
+
+    if (_role.contains('fabric') || _role.contains('seller')) {
+      return FabricSellerDashboard(sellerId: _uid ?? '');
+    }
+
+    // default: customer dashboard
+    return const CustomerDashboard();
   }
 
   void _sharePost(Map<String, dynamic> post) {
@@ -723,7 +771,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     return Stack(
       children: [
         SizedBox(
-          height: 350,
+          height: 400,
           width: double.infinity,
           child: PageView.builder(
             onPageChanged: (index) {
@@ -733,16 +781,47 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             },
             itemCount: mediaUrls.length,
             itemBuilder: (context, index) {
+              String imageUrl = mediaUrls[index];
+              // Ensure URL is being used correctly
+              if (imageUrl.isEmpty) {
+                return Container(
+                  height: 400,
+                  color: AppColors.surfaceVariant,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.image_not_supported,
+                          size: 48,
+                          color: AppColors.textTertiary,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Image unavailable',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
               return ClipRRect(
+                borderRadius: BorderRadius.circular(AppBorderRadius.md),
                 child: Image.network(
-                  mediaUrls[index],
+                  imageUrl,
                   fit: BoxFit.cover,
                   width: double.infinity,
-                  height: 350,
+                  height: 400,
+                  cacheWidth: 1000,
+                  cacheHeight: 800,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
                     return Container(
-                      height: 350,
+                      height: 400,
                       color: AppColors.surfaceVariant,
                       child: Center(
                         child: CircularProgressIndicator(
@@ -757,9 +836,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     );
                   },
                   errorBuilder: (context, error, stackTrace) {
-                    debugPrint('Image load error: $error');
+                    debugPrint('Image load error for URL: $imageUrl');
+                    debugPrint('Error: $error');
+                    debugPrint('Stack trace: $stackTrace');
                     return Container(
-                      height: 350,
+                      height: 400,
                       color: AppColors.surfaceVariant,
                       child: Center(
                         child: Column(
@@ -774,6 +855,13 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                             Text(
                               'Image unavailable',
                               style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textTertiary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Check your connection',
+                              style: AppTextStyles.labelSmall.copyWith(
                                 color: AppColors.textTertiary,
                               ),
                             ),

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../theme/app_theme.dart';
 import 'landing_page.dart';
 
@@ -48,12 +50,14 @@ class _CustomerProfileState extends State<CustomerProfile> {
             _descriptionController.text = data['description'] ?? "";
             _displayName = data['username'] ?? data['fullName'] ?? "User";
             _userRole = data['role'] ?? "Member";
-            _photoUrl = user.photoURL;
+            // Try to get profile picture from Cloudinary first, then fall back to Auth
+            _photoUrl = data['profilePictureUrl'] ?? user.photoURL;
             _isLoading = false;
           });
         } else {
           setState(() {
             _displayName = user.displayName ?? "New User";
+            _photoUrl = user.photoURL;
             _isLoading = false;
           });
         }
@@ -75,12 +79,11 @@ class _CustomerProfileState extends State<CustomerProfile> {
           'lastUpdated': Timestamp.now(),
         }, SetOptions(merge: true));
 
-        setState(() {
-          _displayName = _usernameController.text;
-          _isSaving = false;
-        });
+        // Reload user data to reflect changes immediately
+        await _loadUserData();
 
         if (mounted) {
+          setState(() => _isSaving = false);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text("Profile Updated Successfully!"),
@@ -95,6 +98,18 @@ class _CustomerProfileState extends State<CustomerProfile> {
       } catch (e) {
         setState(() => _isSaving = false);
         debugPrint("Error saving: $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error: ${e.toString()}"),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+              ),
+            ),
+          );
+        }
       }
     }
   }
@@ -103,7 +118,103 @@ class _CustomerProfileState extends State<CustomerProfile> {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() => _photoUrl = image.path);
+      // Upload to Cloudinary
+      try {
+        setState(() => _isSaving = true);
+        final uploadedUrl = await _uploadProfilePictureToCloudinary(image.path);
+
+        // Save the Cloudinary URL to Firebase
+        final User? user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+                'profilePictureUrl': uploadedUrl,
+                'lastUpdated': Timestamp.now(),
+              }, SetOptions(merge: true));
+
+          if (mounted) {
+            setState(() {
+              _photoUrl = uploadedUrl;
+              _isSaving = false;
+            });
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text("Profile picture updated successfully!"),
+                backgroundColor: AppColors.success,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+                ),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Error uploading picture: $e"),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+              ),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<String> _uploadProfilePictureToCloudinary(String imagePath) async {
+    const cloudName = 'dr8f7af8z';
+    const uploadPreset = 'fashionHub_app';
+    final imageFile = File(imagePath);
+    final url = Uri.parse(
+      'https://api.cloudinary.com/v1_1/$cloudName/image/upload',
+    );
+
+    final request = http.MultipartRequest('POST', url)
+      ..fields['upload_preset'] = uploadPreset
+      ..fields['folder'] = 'fashionhub/profile'
+      ..fields['quality'] = 'auto'
+      ..fields['fetch_format'] = 'auto'
+      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+    final response = await request.send();
+    if (response.statusCode != 200) {
+      throw Exception('Failed to upload profile picture to Cloudinary');
+    }
+
+    final resStr = await response.stream.bytesToString();
+    final resJson = json.decode(resStr);
+    final secureUrl = resJson['secure_url'] as String;
+
+    // Optimize URL for profile pictures
+    return _optimizeProfilePictureUrl(secureUrl);
+  }
+
+  String _optimizeProfilePictureUrl(String url) {
+    try {
+      if (!url.contains('res.cloudinary.com')) {
+        return url;
+      }
+
+      final parts = url.split('/upload/');
+      if (parts.length != 2) {
+        return url;
+      }
+
+      // Transformations for profile pictures: circular crop, smaller size
+      final transformations = 'c_fill,w_300,h_300,q_auto,f_auto,dpr_auto';
+      return '${parts[0]}/upload/$transformations/${parts[1]}';
+    } catch (e) {
+      debugPrint('Error optimizing profile picture URL: $e');
+      return url;
     }
   }
 
@@ -1219,7 +1330,32 @@ class _CustomerProfileState extends State<CustomerProfile> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Username field
+              Text(
+                "Username",
+                style: AppTextStyles.bodyLarge.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _usernameController,
+                decoration: InputDecoration(
+                  hintText: "Enter your username",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                    borderSide: BorderSide(color: AppColors.primary),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                    borderSide: BorderSide(color: AppColors.primary, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
               // Style Bio field
               Text(
                 "Style Bio",
@@ -1227,7 +1363,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               TextField(
                 controller: _descriptionController,
                 maxLines: 3,
@@ -1245,6 +1381,71 @@ class _CustomerProfileState extends State<CustomerProfile> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // Account Settings Section Header
+              Text(
+                "Account Settings",
+                style: AppTextStyles.h4.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Change Password button
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lock_outline, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        Text(
+                          "Change Password",
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Icon(Icons.chevron_right, color: AppColors.textTertiary),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Profile Picture section
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceVariant,
+                  borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.add_a_photo, color: AppColors.primary),
+                        const SizedBox(width: 12),
+                        Text(
+                          "Change Profile Picture",
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Icon(Icons.chevron_right, color: AppColors.textTertiary),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
