@@ -175,7 +175,10 @@ class CustomerDashboard extends StatelessWidget {
           AppColors.secondary,
           () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const StyleGalleryPage()),
+            MaterialPageRoute(
+              builder: (context) =>
+                  const StyleGalleryPage(title: null, categories: []),
+            ),
           ),
         ),
         _buildActionCard(

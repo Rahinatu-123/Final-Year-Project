@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
+import 'style_gallery.dart'; // <-- your gallery page
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key});
@@ -8,69 +10,43 @@ class ExplorePage extends StatefulWidget {
   State<ExplorePage> createState() => _ExplorePageState();
 }
 
-class _ExplorePageState extends State<ExplorePage>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _ExplorePageState extends State<ExplorePage> {
   int _selectedCategoryIndex = 0;
 
-  final List<Map<String, dynamic>> categories = const [
+  final List<String> categoryFilters = ['All', 'Styles', 'Tailors', 'Fabrics'];
+
+  final List<Map<String, dynamic>> categories = [
     {
       'name': 'Bridal',
       'icon': Icons.favorite,
-      'image':
-          'https://images.pexels.com/photos/1035683/pexels-photo-1035683.jpeg',
+      'firestoreCategories': ['bridal kenta', 'lace'],
     },
     {
-      'name': 'Traditional',
+      'name': 'Tailors', // <-- changed from Traditional
       'icon': Icons.star,
-      'image':
-          'https://images.pexels.com/photos/1654648/pexels-photo-1654648.jpeg',
+      'firestoreCategories': ['kaba and slit', 'bridal kenta', 'tailor'],
     },
     {
-      'name': 'Suits',
-      'icon': Icons.business_center,
-      'image':
-          'https://images.pexels.com/photos/375810/pexels-photo-375810.jpeg',
+      'name': 'Men',
+      'icon': Icons.man,
+      'firestoreCategories': ['men'],
     },
     {
-      'name': 'Lace & Asoebi',
+      'name': 'Lace',
       'icon': Icons.auto_awesome,
-      'image':
-          'https://images.pexels.com/photos/984619/pexels-photo-984619.jpeg',
+      'firestoreCategories': ['lace'],
     },
     {
-      'name': 'Evening Wear',
-      'icon': Icons.nightlife,
-      'image':
-          'https://images.pexels.com/photos/1755428/pexels-photo-1755428.jpeg',
+      'name': 'Simple Wear',
+      'icon': Icons.checkroom,
+      'firestoreCategories': ['short dress', 'long dress', 'jumpsuit'],
     },
     {
-      'name': 'Accessories',
-      'icon': Icons.diamond,
-      'image':
-          'https://images.pexels.com/photos/1413420/pexels-photo-1413420.jpeg',
+      'name': 'Fabric',
+      'icon': Icons.texture,
+      'firestoreCategories': ['fabric'],
     },
   ];
-
-  final List<String> categoryFilters = [
-    'All',
-    'Styles',
-    'Tailors',
-    'Fabrics',
-    'Trends',
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: categoryFilters.length, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,16 +55,9 @@ class _ExplorePageState extends State<ExplorePage>
       body: SafeArea(
         child: Column(
           children: [
-            // Custom App Bar
             _buildAppBar(),
-
-            // Search Bar
             _buildSearchBar(),
-
-            // Category Tabs
             _buildCategoryTabs(),
-
-            // Category Grid
             Expanded(child: _buildCategoryGrid()),
           ],
         ),
@@ -101,56 +70,7 @@ class _ExplorePageState extends State<ExplorePage>
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text("Explore", style: AppTextStyles.h2),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                  boxShadow: AppShadows.soft,
-                ),
-                child: const Icon(
-                  Icons.filter_list_rounded,
-                  color: AppColors.textPrimary,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-                  boxShadow: AppShadows.soft,
-                ),
-                child: Stack(
-                  children: [
-                    const Icon(
-                      Icons.favorite_border_rounded,
-                      color: AppColors.textPrimary,
-                      size: 22,
-                    ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.coral,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+        children: [Text("Explore", style: AppTextStyles.h2)],
       ),
     );
   }
@@ -164,34 +84,12 @@ class _ExplorePageState extends State<ExplorePage>
           borderRadius: BorderRadius.circular(AppBorderRadius.md),
           boxShadow: AppShadows.soft,
         ),
-        child: TextField(
-          style: AppTextStyles.bodyLarge,
+        child: const TextField(
           decoration: InputDecoration(
             hintText: "Search styles, tailors, fabrics...",
-            hintStyle: AppTextStyles.bodyMedium,
-            prefixIcon: const Icon(
-              Icons.search_rounded,
-              color: AppColors.textTertiary,
-              size: 24,
-            ),
-            suffixIcon: Container(
-              margin: const EdgeInsets.all(8),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: AppColors.warmGradient,
-                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-              ),
-              child: const Icon(
-                Icons.tune_rounded,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 16,
-            ),
+            prefixIcon: Icon(Icons.search_rounded),
+            contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           ),
         ),
       ),
@@ -199,9 +97,8 @@ class _ExplorePageState extends State<ExplorePage>
   }
 
   Widget _buildCategoryTabs() {
-    return Container(
+    return SizedBox(
       height: 48,
-      margin: const EdgeInsets.only(top: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -210,22 +107,17 @@ class _ExplorePageState extends State<ExplorePage>
           final isSelected = _selectedCategoryIndex == index;
           return GestureDetector(
             onTap: () => setState(() => _selectedCategoryIndex = index),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+            child: Container(
               margin: const EdgeInsets.only(right: 12),
               padding: const EdgeInsets.symmetric(horizontal: 20),
               decoration: BoxDecoration(
-                gradient: isSelected ? AppColors.warmGradient : null,
-                color: isSelected ? null : AppColors.surface,
-                borderRadius: BorderRadius.circular(AppBorderRadius.xl),
-                boxShadow: isSelected
-                    ? AppShadows.colored(AppColors.coral)
-                    : AppShadows.soft,
+                color: isSelected ? AppColors.primary : AppColors.surface,
+                borderRadius: BorderRadius.circular(30),
               ),
               alignment: Alignment.center,
               child: Text(
                 categoryFilters[index],
-                style: AppTextStyles.labelMedium.copyWith(
+                style: TextStyle(
                   color: isSelected ? Colors.white : AppColors.textSecondary,
                   fontWeight: FontWeight.w600,
                 ),
@@ -248,41 +140,55 @@ class _ExplorePageState extends State<ExplorePage>
       ),
       itemCount: categories.length,
       itemBuilder: (context, index) {
-        return _buildCategoryCard(categories[index], index);
+        return _buildCategoryCard(categories[index]);
       },
     );
   }
 
-  Widget _buildCategoryCard(Map<String, dynamic> category, int index) {
+  Widget _buildCategoryCard(Map<String, dynamic> category) {
     return GestureDetector(
       onTap: () {
-        // Navigate to category detail
+        // Navigate to StylesGalleryPage with the categories for filtering
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StylesGalleryPage(
+              categoryFilters: category['firestoreCategories'] as List<String>,
+              title: category['name'],
+            ),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+          borderRadius: BorderRadius.circular(20),
           boxShadow: AppShadows.medium,
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+          borderRadius: BorderRadius.circular(20),
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Background Image
-              Image.network(
-                category['image'],
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: AppColors.surfaceVariant,
-                  child: const Icon(
-                    Icons.image_not_supported,
-                    color: AppColors.textTertiary,
-                    size: 48,
-                  ),
-                ),
+              FutureBuilder<QuerySnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('styles')
+                    .where(
+                      'category',
+                      whereIn: category['firestoreCategories'] as List<String>,
+                    )
+                    .limit(1)
+                    .get(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                    final imageUrl = snapshot.data!.docs.first['imageUrl'];
+                    return Image.network(imageUrl, fit: BoxFit.cover);
+                  }
+                  return Container(
+                    color: AppColors.surfaceVariant,
+                    child: const Icon(Icons.image_not_supported, size: 48),
+                  );
+                },
               ),
-
-              // Gradient Overlay
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -290,72 +196,29 @@ class _ExplorePageState extends State<ExplorePage>
                     end: Alignment.bottomCenter,
                     colors: [
                       Colors.transparent,
-                      Colors.black.withOpacity(0.3),
-                      Colors.black.withOpacity(0.8),
+                      Colors.black.withOpacity(0.4),
+                      Colors.black.withOpacity(0.85),
                     ],
-                    stops: const [0.3, 0.6, 1.0],
                   ),
                 ),
               ),
-
-              // Content
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Favorite button
                     Align(
                       alignment: Alignment.topRight,
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(
-                            AppBorderRadius.sm,
-                          ),
-                        ),
-                        child: Icon(
-                          category['icon'] as IconData,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
+                      child: Icon(category['icon'], color: Colors.white),
                     ),
-
-                    // Category info
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          category['name'].toString().toUpperCase(),
-                          style: AppTextStyles.buttonMedium.copyWith(
-                            color: Colors.white,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(
-                              AppBorderRadius.xl,
-                            ),
-                          ),
-                          child: Text(
-                            "${(index + 1) * 24} items",
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      category['name'].toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
                     ),
                   ],
                 ),

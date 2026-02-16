@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 
 class StyleGalleryPage extends StatefulWidget {
-  const StyleGalleryPage({super.key});
+  const StyleGalleryPage({
+    super.key,
+    required title,
+    required List<String> categories,
+  });
 
   @override
   State<StyleGalleryPage> createState() => _StyleGalleryPageState();
@@ -13,63 +18,16 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
 
   final List<String> categories = [
     'All',
-    'Traditional',
-    'Formal',
-    'Casual',
-    'Wedding',
-    'Kaftan',
-    'Dashiki',
-  ];
-
-  final List<Map<String, dynamic>> styles = [
-    {
-      'name': 'Classic Kente',
-      'designer': 'Adwoa Designs',
-      'image':
-          'https://images.pexels.com/photos/1035683/pexels-photo-1035683.jpeg',
-      'category': 'Traditional',
-      'likes': 234,
-    },
-    {
-      'name': 'Elegant Ankara',
-      'designer': 'Fashion Hub',
-      'image':
-          'https://images.pexels.com/photos/1654648/pexels-photo-1654648.jpeg',
-      'category': 'Casual',
-      'likes': 189,
-    },
-    {
-      'name': 'Bridal Asoebi',
-      'designer': 'Royal Stitches',
-      'image':
-          'https://images.pexels.com/photos/984619/pexels-photo-984619.jpeg',
-      'category': 'Wedding',
-      'likes': 456,
-    },
-    {
-      'name': 'Modern Dashiki',
-      'designer': 'African Roots',
-      'image':
-          'https://images.pexels.com/photos/375810/pexels-photo-375810.jpeg',
-      'category': 'Casual',
-      'likes': 312,
-    },
-    {
-      'name': 'Formal Kaftan',
-      'designer': 'Design House',
-      'image':
-          'https://images.pexels.com/photos/1755428/pexels-photo-1755428.jpeg',
-      'category': 'Formal',
-      'likes': 278,
-    },
-    {
-      'name': 'Lace Asoebi',
-      'designer': 'Lace & Pearls',
-      'image':
-          'https://images.pexels.com/photos/1413420/pexels-photo-1413420.jpeg',
-      'category': 'Wedding',
-      'likes': 421,
-    },
+    'long dress',
+    'short dress',
+    'ladies top',
+    'top and down',
+    'bridal kenta',
+    'jumpsuit',
+    'lace',
+    'kaba and slit',
+    'men',
+    'couple',
   ];
 
   @override
@@ -90,10 +48,6 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        actions: [
-          IconButton(icon: const Icon(Icons.search), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.filter_list), onPressed: () {}),
-        ],
       ),
       body: Column(
         children: [
@@ -114,6 +68,7 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
         itemCount: categories.length,
         itemBuilder: (context, index) {
           final isSelected = _selectedCategoryIndex == index;
+
           return GestureDetector(
             onTap: () => setState(() => _selectedCategoryIndex = index),
             child: Container(
@@ -140,39 +95,50 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
   }
 
   Widget _buildStyleGrid() {
-    final filteredStyles = _selectedCategoryIndex == 0
-        ? styles
-        : styles
-              .where((s) => s['category'] == categories[_selectedCategoryIndex])
-              .toList();
+    String selectedCategory = categories[_selectedCategoryIndex];
 
-    if (filteredStyles.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.style, size: 64, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
-            Text(
-              "No styles in this category yet",
-              style: AppTextStyles.bodyMedium,
-            ),
-          ],
-        ),
-      );
+    Query query = FirebaseFirestore.instance.collection('styles');
+
+    if (selectedCategory != 'All') {
+      query = query.where('category', isEqualTo: selectedCategory);
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.7,
-      ),
-      itemCount: filteredStyles.length,
-      itemBuilder: (context, index) {
-        return _buildStyleCard(filteredStyles[index]);
+    return StreamBuilder<QuerySnapshot>(
+      stream: query.snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.style, size: 64),
+                SizedBox(height: 16),
+                Text("No styles in this category yet"),
+              ],
+            ),
+          );
+        }
+
+        final styles = snapshot.data!.docs;
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.7,
+          ),
+          itemCount: styles.length,
+          itemBuilder: (context, index) {
+            var style = styles[index].data() as Map<String, dynamic>;
+            return _buildStyleCard(style);
+          },
+        );
       },
     );
   }
@@ -191,7 +157,7 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
             fit: StackFit.expand,
             children: [
               Image.network(
-                style['image'],
+                style['imageUrl'] ?? '',
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
                   color: AppColors.surfaceVariant,
@@ -218,38 +184,22 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        style['name'],
+                        style['name'] ?? '',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
                         ),
                       ),
-                      Text(
-                        style['designer'],
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 12,
-                        ),
-                      ),
                       const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.favorite_border,
-                            color: Colors.white,
-                            size: 16,
+                      if (style['description'] != null)
+                        Text(
+                          style['description'],
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 12,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            "${style['likes']}",
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
                     ],
                   ),
                 ),
@@ -275,72 +225,64 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
             color: AppColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textTertiary.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.network(
-                  style['image'],
-                  height: 300,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    height: 300,
-                    color: AppColors.surfaceVariant,
-                    child: const Icon(Icons.image_not_supported, size: 48),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.textTertiary.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(style['name'], style: AppTextStyles.h3),
-                    const SizedBox(height: 8),
-                    Text(
-                      "by ${style['designer']}",
-                      style: AppTextStyles.bodyMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text("Try On feature coming soon!"),
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.checkroom, size: 20),
-                        label: const Text("Try On This Style"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 20),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.network(
+                    style['imageUrl'] ?? '',
+                    height: 300,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(style['name'] ?? '', style: AppTextStyles.h3),
+                      const SizedBox(height: 12),
+                      Text(style['description'] ?? ''),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Try On feature coming soon!"),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.checkroom, size: 20),
+                          label: const Text("Try On This Style"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
