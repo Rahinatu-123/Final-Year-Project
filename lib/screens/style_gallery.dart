@@ -3,11 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 
 class StyleGalleryPage extends StatefulWidget {
-  const StyleGalleryPage({
-    super.key,
-    required title,
-    required List<String> categories,
-  });
+  final String? title;
+  final List<String> categories;
+
+  const StyleGalleryPage({super.key, this.title, required this.categories});
 
   @override
   State<StyleGalleryPage> createState() => _StyleGalleryPageState();
@@ -16,19 +15,24 @@ class StyleGalleryPage extends StatefulWidget {
 class _StyleGalleryPageState extends State<StyleGalleryPage> {
   int _selectedCategoryIndex = 0;
 
-  final List<String> categories = [
-    'All',
-    'long dress',
-    'short dress',
-    'ladies top',
-    'top and down',
-    'bridal kenta',
-    'jumpsuit',
-    'lace',
-    'kaba and slit',
-    'men',
-    'couple',
-  ];
+  List<String> get categories {
+    if (widget.categories.isNotEmpty) {
+      return ['All', ...widget.categories];
+    }
+    return [
+      'All',
+      'long dress',
+      'short dress',
+      'ladies top',
+      'top and down',
+      'bridal kenta',
+      'jumpsuit',
+      'lace',
+      'kaba and slit',
+      'men',
+      'couple',
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,9 +45,9 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
           icon: const Icon(Icons.arrow_back_ios_new),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          "Style Gallery",
-          style: TextStyle(
+        title: Text(
+          widget.title ?? "Style Gallery",
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
           ),

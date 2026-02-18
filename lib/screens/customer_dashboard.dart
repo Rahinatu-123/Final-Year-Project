@@ -160,7 +160,7 @@ class CustomerDashboard extends StatelessWidget {
         ),
         _buildActionCard(
           context,
-          "Find\nConnection",
+          "My\nChat",
           Icons.search,
           AppColors.accent,
           () => Navigator.push(
@@ -170,7 +170,7 @@ class CustomerDashboard extends StatelessWidget {
         ),
         _buildActionCard(
           context,
-          "Browse\nStyles",
+          "Visualize\nStyle",
           Icons.style,
           AppColors.secondary,
           () => Navigator.push(
