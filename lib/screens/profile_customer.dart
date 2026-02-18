@@ -43,6 +43,32 @@ class _CustomerProfileState extends State<CustomerProfile> {
     _loadUserData();
   }
 
+  // ================= FOLLOW/UNFOLLOW METHODS =================
+
+  Stream<int> followersCount() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return const Stream.empty();
+
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('followers')
+        .snapshots()
+        .map((snapshot) => snapshot.size);
+  }
+
+  Stream<int> followingCount() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return const Stream.empty();
+
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .collection('connections')
+        .snapshots()
+        .map((snapshot) => snapshot.size);
+  }
+
   Future<void> _loadUserData() async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
@@ -656,62 +682,30 @@ class _CustomerProfileState extends State<CustomerProfile> {
                             ),
                             const SizedBox(width: 20),
 
-                            // Followers & Following counts from user doc
-                            StreamBuilder<DocumentSnapshot>(
-                              stream: FirebaseAuth.instance.currentUser != null
-                                  ? FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(
-                                          FirebaseAuth
-                                              .instance
-                                              .currentUser!
-                                              .uid,
-                                        )
-                                        .snapshots()
-                                  : const Stream.empty(),
+                            // Followers & Following counts from subcollections
+                            StreamBuilder<int>(
+                              stream: followersCount(),
+                              builder: (context, followersSnap) {
+                                final followers = followersSnap.data ?? 0;
+                                return StreamBuilder<int>(
+                                  stream: followingCount(),
+                                  builder: (context, followingSnap) {
+                                    final following = followingSnap.data ?? 0;
 
-                              builder: (context, userSnap) {
-                                int followers = 0;
-                                int following = 0;
-
-                                if (userSnap.hasData && userSnap.data!.exists) {
-                                  final data =
-                                      userSnap.data!.data()
-                                          as Map<String, dynamic>;
-
-                                  // 1. Check for 'followersCount' integer
-                                  if (data.containsKey('followersCount')) {
-                                    followers = data['followersCount'] ?? 0;
-                                  }
-                                  // 2. Fallback: Check if 'followers' is a List and get length
-                                  else if (data['followers'] is List) {
-                                    followers =
-                                        (data['followers'] as List).length;
-                                  }
-
-                                  // 3. Check for 'followingCount' integer
-                                  if (data.containsKey('followingCount')) {
-                                    following = data['followingCount'] ?? 0;
-                                  }
-                                  // 4. Fallback: Check if 'following' is a List and get length
-                                  else if (data['following'] is List) {
-                                    following =
-                                        (data['following'] as List).length;
-                                  }
-                                }
-
-                                return Row(
-                                  children: [
-                                    _buildHeaderStatItem(
-                                      followers.toString(),
-                                      'Followers',
-                                    ),
-                                    const SizedBox(width: 20),
-                                    _buildHeaderStatItem(
-                                      following.toString(),
-                                      'Following',
-                                    ),
-                                  ],
+                                    return Row(
+                                      children: [
+                                        _buildHeaderStatItem(
+                                          followers.toString(),
+                                          'Followers',
+                                        ),
+                                        const SizedBox(width: 20),
+                                        _buildHeaderStatItem(
+                                          following.toString(),
+                                          'Following',
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 );
                               },
                             ),

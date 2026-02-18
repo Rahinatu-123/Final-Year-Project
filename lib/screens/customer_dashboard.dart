@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import 'visualize_style.dart';
 import 'style_gallery.dart';
 import 'sew_with_me.dart';
 import 'explore.dart';
 import 'overlay.dart'; // AICameraOverlay for measurement capture
-import 'find_connection.dart';
+import 'package:fashionhub/screens/mutual_connections.dart';
 
 class CustomerDashboard extends StatelessWidget {
   const CustomerDashboard({super.key});
@@ -165,7 +166,9 @@ class CustomerDashboard extends StatelessWidget {
           AppColors.accent,
           () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const FindConnectionPage()),
+            MaterialPageRoute(
+              builder: (context) => const MutualConnectionsPage(),
+            ),
           ),
         ),
         _buildActionCard(
@@ -175,10 +178,7 @@ class CustomerDashboard extends StatelessWidget {
           AppColors.secondary,
           () => Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) =>
-                  const StyleGalleryPage(title: null, categories: []),
-            ),
+            MaterialPageRoute(builder: (context) => const VisualizeStylePage()),
           ),
         ),
         _buildActionCard(
