@@ -15,7 +15,7 @@ class FabricSellerDashboard extends StatefulWidget {
 class _FabricSellerDashboardState extends State<FabricSellerDashboard> {
   final FabricSellerService _fabricService = FabricSellerService();
   bool _isLoading = true;
-  late Map<String, dynamic> _salesOverview;
+  Map<String, dynamic> _salesOverview = {};
 
   @override
   void initState() {

@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:fashionhub/screens/business_profile.dart';
+import 'package:fashionhub/screens/business_profile_new.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1939,7 +1939,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
-                                    const BusinessProfileScreen(),
+                                    const BusinessProfileScreenNew(),
                               ),
                             );
                           },

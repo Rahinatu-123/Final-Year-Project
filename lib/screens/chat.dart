@@ -22,6 +22,18 @@ class _ChatScreenState extends State<ChatScreen> {
   final userId = FirebaseAuth.instance.currentUser?.uid;
   final ScrollController _scrollController = ScrollController();
 
+  @override
+  void initState() {
+    super.initState();
+    _messageController.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    setState(() {});
+  }
+
+  bool get _hasText => _messageController.text.trim().isNotEmpty;
+
   void _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
@@ -302,17 +314,22 @@ class _ChatScreenState extends State<ChatScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            // Attachment button
+            // Share/Upload button
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: AppColors.surfaceVariant,
                 borderRadius: BorderRadius.circular(AppBorderRadius.sm),
               ),
-              child: const Icon(
-                Icons.add,
-                color: AppColors.textSecondary,
-                size: 22,
+              child: IconButton(
+                icon: const Icon(Icons.add, color: AppColors.primary),
+                onPressed: () {
+                  // TODO: Implement share/upload functionality
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Share/Upload coming soon!')),
+                  );
+                },
+                tooltip: 'Share/Upload',
               ),
             ),
             const SizedBox(width: 12),
@@ -351,19 +368,32 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(width: 12),
 
-            // Send button
+            // Always show mic button with send arrow when text is present
+            const SizedBox(width: 8),
             GestureDetector(
-              onTap: _sendMessage,
+              onTap: _hasText
+                  ? _sendMessage
+                  : () {
+                      // TODO: Implement audio recording
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Audio recording coming soon!'),
+                        ),
+                      );
+                    },
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: AppColors.warmGradient,
+                  gradient: _hasText ? AppColors.warmGradient : null,
+                  color: _hasText ? null : AppColors.surfaceVariant,
                   shape: BoxShape.circle,
-                  boxShadow: AppShadows.colored(AppColors.coral),
+                  boxShadow: _hasText
+                      ? AppShadows.colored(AppColors.coral)
+                      : null,
                 ),
-                child: const Icon(
-                  Icons.send_rounded,
-                  color: Colors.white,
+                child: Icon(
+                  _hasText ? Icons.send : Icons.mic,
+                  color: _hasText ? Colors.white : AppColors.primary,
                   size: 22,
                 ),
               ),
