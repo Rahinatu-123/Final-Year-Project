@@ -173,6 +173,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
             mediaFile.path,
           );
           videoUrl = uploadedVideoUrl;
+          mediaUrls.add(uploadedVideoUrl);
         } else {
           final uploadedImageUrl = await _uploadImageToCloudinary(
             mediaFile.path,

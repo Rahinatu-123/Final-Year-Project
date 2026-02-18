@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
-import 'style_gallery.dart'; // <-- your gallery page
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key});
@@ -22,9 +21,9 @@ class _ExplorePageState extends State<ExplorePage> {
       'firestoreCategories': ['bridal kenta', 'lace'],
     },
     {
-      'name': 'Tailors', // <-- changed from Traditional
+      'name': 'Traditional',
       'icon': Icons.star,
-      'firestoreCategories': ['kaba and slit', 'bridal kenta', 'tailor'],
+      'firestoreCategories': ['kaba and slit', 'bridal kenta', 'traditional'],
     },
     {
       'name': 'Men',
@@ -148,16 +147,7 @@ class _ExplorePageState extends State<ExplorePage> {
   Widget _buildCategoryCard(Map<String, dynamic> category) {
     return GestureDetector(
       onTap: () {
-        // Navigate to StylesGalleryPage with the categories for filtering
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => StylesGalleryPage(
-              categoryFilters: category['firestoreCategories'] as List<String>,
-              title: category['name'],
-            ),
-          ),
-        );
+        // TODO: Navigate to filtered page
       },
       child: Container(
         decoration: BoxDecoration(
@@ -189,6 +179,8 @@ class _ExplorePageState extends State<ExplorePage> {
                   );
                 },
               ),
+
+              // Gradient overlay
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -202,6 +194,8 @@ class _ExplorePageState extends State<ExplorePage> {
                   ),
                 ),
               ),
+
+              // Content
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(

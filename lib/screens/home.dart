@@ -9,6 +9,7 @@ import 'profile_customer.dart';
 import 'explore.dart';
 import 'tailor_dashboard_enhanced.dart' as tailor_dashboard;
 import 'fabric_seller_dashboard.dart';
+import 'package:video_player/video_player.dart';
 
 class UniversalHome extends StatefulWidget {
   const UniversalHome({super.key});
@@ -405,7 +406,7 @@ class HomeFeedPage extends StatefulWidget {
 }
 
 class _HomeFeedPageState extends State<HomeFeedPage> {
-  late Map<String, int> _carouselIndices = {};
+  late Map<String, int> _carouselIndices;
 
   void _toggleLike(String postId, List likes) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -427,6 +428,11 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _carouselIndices = {}; // initialize here
+  }
+
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Column(
@@ -700,7 +706,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
 
           // Image carousel
-          _buildImageCarousel(post),
+          _buildImageCarousel(docId, post),
 
           // Actions
           Padding(
@@ -764,90 +770,43 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     );
   }
 
-  Widget _buildImageCarousel(Map<String, dynamic> post) {
+  Widget _buildImageCarousel(String postId, Map<String, dynamic> post) {
     final mediaUrls = (post['mediaUrls'] as List?)?.cast<String>() ?? [];
-    final postId = post['userId'];
 
     if (mediaUrls.isEmpty) {
-      return Container(
-        height: 350,
-        color: AppColors.surfaceVariant,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.image_not_supported,
-                size: 48,
-                color: AppColors.textTertiary,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Image unavailable',
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: AppColors.textTertiary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      print("Post $postId has no media URLs");
+      return _buildMediaPlaceholder(); // Your existing empty state code
     }
 
     return Stack(
       children: [
         SizedBox(
-          height: 400,
-          width: double.infinity,
+          height: 350,
           child: PageView.builder(
+            itemCount: mediaUrls.length,
             onPageChanged: (index) {
               setState(() {
                 _carouselIndices[postId] = index;
               });
             },
-            itemCount: mediaUrls.length,
             itemBuilder: (context, index) {
-              String imageUrl = mediaUrls[index];
-              // Ensure URL is being used correctly
-              if (imageUrl.isEmpty) {
-                return Container(
-                  height: 400,
-                  color: AppColors.surfaceVariant,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.image_not_supported,
-                          size: 48,
-                          color: AppColors.textTertiary,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Image unavailable',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
+              final url = mediaUrls[index];
+              final isVideo =
+                  url.toLowerCase().endsWith(".mp4") ||
+                  url.toLowerCase().endsWith(".mov") ||
+                  url.toLowerCase().endsWith(".avi");
 
-              return ClipRRect(
-                borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                child: Image.network(
-                  imageUrl,
+              if (isVideo) {
+                return VideoPreviewWidget(url: url);
+              } else {
+                return Image.network(
+                  url,
                   fit: BoxFit.cover,
                   width: double.infinity,
-                  height: 400,
-                  cacheWidth: 1000,
-                  cacheHeight: 800,
+                  height: 350,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;
                     return Container(
-                      height: 400,
                       color: AppColors.surfaceVariant,
                       child: Center(
                         child: CircularProgressIndicator(
@@ -856,24 +815,19 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                     loadingProgress.expectedTotalBytes!
                               : null,
                           color: AppColors.primary,
-                          strokeWidth: 2,
                         ),
                       ),
                     );
                   },
                   errorBuilder: (context, error, stackTrace) {
-                    debugPrint('Image load error for URL: $imageUrl');
-                    debugPrint('Error: $error');
-                    debugPrint('Stack trace: $stackTrace');
                     return Container(
-                      height: 400,
                       color: AppColors.surfaceVariant,
                       child: Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              Icons.image_not_supported,
+                              Icons.broken_image_outlined,
                               size: 48,
                               color: AppColors.textTertiary,
                             ),
@@ -884,24 +838,17 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                                 color: AppColors.textTertiary,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Check your connection',
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: AppColors.textTertiary,
-                              ),
-                            ),
                           ],
                         ),
                       ),
                     );
                   },
-                ),
-              );
+                );
+              }
             },
           ),
         ),
-        // Image counter badge (only show if multiple images)
+        // Page indicator badge (only if more than one media)
         if (mediaUrls.length > 1)
           Positioned(
             top: 12,
@@ -909,19 +856,47 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.textPrimary.withOpacity(0.7),
-                borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
                 '${(_carouselIndices[postId] ?? 0) + 1}/${mediaUrls.length}',
-                style: AppTextStyles.labelMedium.copyWith(
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
+                  fontSize: 14,
                 ),
               ),
             ),
           ),
       ],
+    );
+  }
+
+  // Placeholder for posts with no media
+  Widget _buildMediaPlaceholder() {
+    return Container(
+      height: 200,
+      color: AppColors.surfaceVariant,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.image_not_supported_outlined,
+              size: 48,
+              color: AppColors.textTertiary,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'No images or videos',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textTertiary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1235,5 +1210,106 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
       final years = (difference.inDays / 365).floor();
       return '${years}y ago';
     }
+  }
+}
+
+class VideoPreviewWidget extends StatefulWidget {
+  final String url;
+  const VideoPreviewWidget({super.key, required this.url});
+
+  @override
+  State<VideoPreviewWidget> createState() => _VideoPreviewWidgetState();
+}
+
+class _VideoPreviewWidgetState extends State<VideoPreviewWidget> {
+  late VideoPlayerController _controller;
+  bool _isInitialized = false;
+  bool _hasError = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize()
+          .then((_) {
+            if (mounted) {
+              setState(() {
+                _isInitialized = true;
+              });
+            }
+          })
+          .catchError((error) {
+            if (mounted) {
+              setState(() {
+                _hasError = true;
+              });
+            }
+            debugPrint('Video error: $error');
+          }); // Show video once initialized
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_hasError) {
+      return Container(
+        color: AppColors.surfaceVariant,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.videocam_off_outlined,
+                size: 48,
+                color: AppColors.textTertiary,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Video unavailable',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!_isInitialized) {
+      return Container(
+        color: AppColors.surfaceVariant,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        AspectRatio(
+          aspectRatio: _controller.value.aspectRatio,
+          child: VideoPlayer(_controller),
+        ),
+        IconButton(
+          icon: Icon(
+            _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+            color: Colors.white,
+            size: 40,
+          ),
+          onPressed: () {
+            setState(() {
+              _controller.value.isPlaying
+                  ? _controller.pause()
+                  : _controller.play();
+            });
+          },
+        ),
+      ],
+    );
   }
 }

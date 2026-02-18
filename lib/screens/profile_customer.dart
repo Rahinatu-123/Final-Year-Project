@@ -669,24 +669,34 @@ class _CustomerProfileState extends State<CustomerProfile> {
                                         )
                                         .snapshots()
                                   : const Stream.empty(),
+
                               builder: (context, userSnap) {
                                 int followers = 0;
                                 int following = 0;
-                                if (userSnap.hasData && userSnap.data != null) {
+
+                                if (userSnap.hasData && userSnap.data!.exists) {
                                   final data =
                                       userSnap.data!.data()
-                                          as Map<String, dynamic>?;
-                                  if (data != null) {
-                                    followers = (data['followersCount'] is int)
-                                        ? data['followersCount'] as int
-                                        : (data['followers'] is List)
-                                        ? (data['followers'] as List).length
-                                        : 0;
-                                    following = (data['followingCount'] is int)
-                                        ? data['followingCount'] as int
-                                        : (data['following'] is List)
-                                        ? (data['following'] as List).length
-                                        : 0;
+                                          as Map<String, dynamic>;
+
+                                  // 1. Check for 'followersCount' integer
+                                  if (data.containsKey('followersCount')) {
+                                    followers = data['followersCount'] ?? 0;
+                                  }
+                                  // 2. Fallback: Check if 'followers' is a List and get length
+                                  else if (data['followers'] is List) {
+                                    followers =
+                                        (data['followers'] as List).length;
+                                  }
+
+                                  // 3. Check for 'followingCount' integer
+                                  if (data.containsKey('followingCount')) {
+                                    following = data['followingCount'] ?? 0;
+                                  }
+                                  // 4. Fallback: Check if 'following' is a List and get length
+                                  else if (data['following'] is List) {
+                                    following =
+                                        (data['following'] as List).length;
                                   }
                                 }
 
