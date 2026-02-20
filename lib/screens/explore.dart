@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import 'style_gallery.dart';
 import 'fabric_gallery.dart';
+import 'shop_gallery.dart';
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key});
@@ -15,7 +16,7 @@ class _ExplorePageState extends State<ExplorePage> {
   int _selectedCategoryIndex = 0;
   final TextEditingController _searchController = TextEditingController();
 
-  final List<String> categoryFilters = ['All', 'Styles', 'Fabrics'];
+  final List<String> categoryFilters = ['All', 'Styles', 'Fabrics', 'Shop'];
 
   final List<Map<String, dynamic>> categories = [
     {
@@ -142,6 +143,16 @@ class _ExplorePageState extends State<ExplorePage> {
                       title: "All Fabrics",
                       categories: [],
                     ),
+                  ),
+                );
+              }
+
+              // Navigate to Shop when Shop tab is clicked
+              if (categoryFilters[index] == 'Shop') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ShopGalleryPage(),
                   ),
                 );
               }

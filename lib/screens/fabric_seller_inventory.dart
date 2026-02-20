@@ -297,7 +297,7 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${fabric.pricePerYard.toStringAsFixed(2)}/yard',
+                    'GHS ${fabric.pricePerYard.toStringAsFixed(2)}/yard',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 11,
@@ -347,7 +347,7 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '\$${fabric.pricePerYard.toStringAsFixed(2)}/yard',
+              'GHS ${fabric.pricePerYard.toStringAsFixed(2)}/yard',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             _buildStockStatusText(fabric),

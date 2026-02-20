@@ -11,7 +11,7 @@ class BusinessService {
     if (userId == null) return null;
 
     try {
-      return await _firestore.collection('business').doc(userId).get();
+      return await _firestore.collection('users').doc(userId).get();
     } catch (e) {
       print('Error getting business profile: $e');
       return null;
@@ -37,7 +37,7 @@ class BusinessService {
     if (userId == null) return false;
 
     try {
-      await _firestore.collection('business').doc(userId).set({
+      await _firestore.collection('users').doc(userId).set({
         'businessName': businessName,
         'description': description,
         'phone': phone,
@@ -69,7 +69,7 @@ class BusinessService {
     if (userId == null) return false;
 
     try {
-      await _firestore.collection('business').doc(userId).update({
+      await _firestore.collection('users').doc(userId).update({
         'logoUrl': logoUrl,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -83,7 +83,7 @@ class BusinessService {
   // Get all active businesses (for discovery)
   Future<QuerySnapshot> getActiveBusinesses() async {
     return await _firestore
-        .collection('business')
+        .collection('users')
         .where('isActive', isEqualTo: true)
         .orderBy('createdAt', descending: true)
         .get();
@@ -91,7 +91,7 @@ class BusinessService {
 
   // Stream for business profile updates
   Stream<DocumentSnapshot> businessProfileStream(String userId) {
-    return _firestore.collection('business').doc(userId).snapshots();
+    return _firestore.collection('users').doc(userId).snapshots();
   }
 
   // Delete business profile
@@ -100,7 +100,21 @@ class BusinessService {
     if (userId == null) return false;
 
     try {
-      await _firestore.collection('business').doc(userId).delete();
+      await _firestore.collection('users').doc(userId).update({
+        'businessName': FieldValue.delete(),
+        'description': FieldValue.delete(),
+        'phone': FieldValue.delete(),
+        'email': FieldValue.delete(),
+        'location': FieldValue.delete(),
+        'instagram': FieldValue.delete(),
+        'bio': FieldValue.delete(),
+        'logoUrl': FieldValue.delete(),
+        'latitude': FieldValue.delete(),
+        'longitude': FieldValue.delete(),
+        'services': FieldValue.delete(),
+        'specialties': FieldValue.delete(),
+        'isActive': FieldValue.delete(),
+      });
       return true;
     } catch (e) {
       print('Error deleting business profile: $e');
@@ -114,7 +128,7 @@ class BusinessService {
     if (userId == null) return false;
 
     try {
-      await _firestore.collection('business').doc(userId).update({
+      await _firestore.collection('users').doc(userId).update({
         'isActive': isActive,
         'updatedAt': FieldValue.serverTimestamp(),
       });

@@ -751,13 +751,6 @@ class _CustomerProfileState extends State<CustomerProfile> {
                               ),
                             ],
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Business Details',
-                            style: AppTextStyles.h4.copyWith(
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -1961,37 +1954,6 @@ class _CustomerProfileState extends State<CustomerProfile> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Add to Portfolio Button
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            // Navigate to create post screen
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => CreatePostScreen(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.add),
-                          label: Text(
-                            'Add Portfolio',
-                            style: AppTextStyles.buttonMedium,
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                AppBorderRadius.md,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               ],

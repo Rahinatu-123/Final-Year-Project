@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:io';
+import 'package:http/http.dart' as http;
 
 /// Service for managing Cloudinary image URLs
 /// Store image URLs from Cloudinary in Firebase Firestore
@@ -21,6 +23,45 @@ class CloudinaryService {
   /// Get current user ID
   String? getCurrentUserId() {
     return _auth.currentUser?.uid;
+  }
+
+  /// Upload image file to Cloudinary
+  /// Returns the uploaded image URL or null if upload failed
+  Future<String?> uploadImage(File imageFile) async {
+    try {
+      final uri = Uri.parse(
+        'https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload',
+      );
+
+      final request = http.MultipartRequest('POST', uri);
+      request.fields['upload_preset'] = cloudinaryUploadPreset;
+      request.files.add(
+        await http.MultipartFile.fromPath('file', imageFile.path),
+      );
+
+      final response = await request.send();
+
+      if (response.statusCode == 200) {
+        final responseData = await response.stream.toBytes();
+        final responseString = String.fromCharCodes(responseData);
+
+        // Parse JSON response to get secure_url
+        // Expected response: {"secure_url": "https://res.cloudinary.com/...", ...}
+        if (responseString.contains('secure_url')) {
+          // Extract URL from JSON response
+          final startIndex = responseString.indexOf('"secure_url":"') + 14;
+          final endIndex = responseString.indexOf('"', startIndex);
+          final imageUrl = responseString.substring(startIndex, endIndex);
+
+          return imageUrl;
+        }
+        return null;
+      } else {
+        throw Exception('Upload failed with status ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Failed to upload image: $e');
+    }
   }
 
   /// Save Cloudinary image URL to Firebase

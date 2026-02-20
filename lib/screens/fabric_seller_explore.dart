@@ -199,7 +199,7 @@ class _FabricSellerExploreState extends State<FabricSellerExplore> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '\$${fabric.pricePerYard.toStringAsFixed(2)}/yard',
+                    'GHS ${fabric.pricePerYard.toStringAsFixed(2)}/yard',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 11,

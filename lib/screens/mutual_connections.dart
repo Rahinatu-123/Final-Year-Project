@@ -369,33 +369,139 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.chat_bubble_outline,
-              size: 48,
-              color: AppColors.primary,
-            ),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.handshake,
+                  size: 64,
+                  color: AppColors.primary,
+                ),
+              ),
+              const SizedBox(height: 28),
+              Text(
+                "No Mutual Connections Yet",
+                style: AppTextStyles.h3.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Start conversations by connecting with other tailors, seamstresses, and fabric sellers in your community.",
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.search,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Find People",
+                                style: AppTextStyles.labelLarge.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "Tap the search icon to find and follow other professionals",
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      height: 1,
+                      color: AppColors.primary.withOpacity(0.1),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.favorite_border,
+                            color: AppColors.accent,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Follow & Get Followed",
+                                style: AppTextStyles.labelLarge.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                "When they follow you back, you can chat",
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+            ],
           ),
-          const SizedBox(height: 20),
-          Text(
-            "No mutual connections yet",
-            style: AppTextStyles.h4.copyWith(color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Connect with more people to see mutual connections here",
-            style: AppTextStyles.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -405,55 +511,64 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
   Stream<QuerySnapshot> _getMutualConnections() {
     if (currentUser == null) return const Stream.empty();
 
-    // Get users that current user is following
+    // Get users that current user is following, then filter for mutual connections
     return FirebaseFirestore.instance
         .collection('users')
         .doc(currentUser!.uid)
-        .collection('connections')
+        .collection('following')
         .snapshots()
-        .asyncMap((connectionsSnapshot) async {
-          // Get list of user IDs that current user follows
-          final followingIds = connectionsSnapshot.docs
+        .asyncExpand((followingSnapshot) async* {
+          // Get list of user IDs that current user is following
+          final followingIds = followingSnapshot.docs
               .map((doc) => doc.id)
               .toList();
 
           if (followingIds.isEmpty) {
-            // Return empty query if not following anyone
-            return await FirebaseFirestore.instance
+            // Return empty result using a condition that won't match
+            final emptySnap = await FirebaseFirestore.instance
                 .collection('users')
-                .where(FieldPath.documentId, whereIn: [''])
+                .where(FieldPath.documentId, isEqualTo: '__nonexistent__')
                 .get();
+            yield emptySnap;
+            return;
           }
 
-          // Now get users who are also following back (mutual connections)
+          // Filter for mutual connections (those who follow back)
           final mutualUsers = <String>[];
 
-          // Check each followed user to see if they follow back
           for (final userId in followingIds) {
-            final followBackDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(userId)
-                .collection('connections')
-                .doc(currentUser!.uid)
-                .get();
+            try {
+              final followBackDoc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(userId)
+                  .collection('following')
+                  .doc(currentUser!.uid)
+                  .get();
 
-            if (followBackDoc.exists) {
-              mutualUsers.add(userId);
+              if (followBackDoc.exists) {
+                mutualUsers.add(userId);
+              }
+            } catch (e) {
+              print('Error checking follow back for $userId: $e');
+              continue;
             }
           }
 
           // Return the mutual users' full documents
           if (mutualUsers.isEmpty) {
-            return await FirebaseFirestore.instance
+            final emptySnap = await FirebaseFirestore.instance
                 .collection('users')
-                .where(FieldPath.documentId, whereIn: [''])
+                .where(FieldPath.documentId, isEqualTo: '__nonexistent__')
                 .get();
+            yield emptySnap;
+            return;
           }
 
-          return await FirebaseFirestore.instance
+          final result = await FirebaseFirestore.instance
               .collection('users')
               .where(FieldPath.documentId, whereIn: mutualUsers)
               .get();
+          yield result;
         });
   }
 }

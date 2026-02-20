@@ -181,7 +181,7 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders> {
               children: [
                 // Order Items Summary
                 Text(
-                  '${order.items.length} item(s) - Total: \$${order.totalPrice.toStringAsFixed(2)}',
+                  '${order.items.length} item(s) - Total: GHS ${order.totalPrice.toStringAsFixed(2)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
@@ -415,7 +415,7 @@ class _FabricOrderDetailsSheetState extends State<FabricOrderDetailsSheet> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          '${item.quantityYards} yards x \$${item.pricePerYard.toStringAsFixed(2)} = \$${item.subtotal.toStringAsFixed(2)}',
+                          '${item.quantityYards} yards x GHS ${item.pricePerYard.toStringAsFixed(2)} = GHS ${item.subtotal.toStringAsFixed(2)}',
                           style: const TextStyle(fontSize: 12),
                         ),
                         const SizedBox(height: 8),

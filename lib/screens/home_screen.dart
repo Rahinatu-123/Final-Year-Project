@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import 'order_list.dart';
 import 'explore_enhanced.dart';
-import 'tailor_dashboard_enhanced.dart' as tailor_dashboard;
+import 'tailor_dashboard.dart' as tailor_dashboard;
 import 'business_profile.dart';
 import 'create_post_screen.dart';
 

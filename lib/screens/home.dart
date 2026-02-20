@@ -7,7 +7,7 @@ import 'create_post_screen.dart';
 import 'customer_dashboard.dart';
 import 'profile_customer.dart';
 import 'explore.dart';
-import 'tailor_dashboard_enhanced.dart' as tailor_dashboard;
+import 'tailor_dashboard.dart' as tailor_dashboard;
 import 'fabric_seller_dashboard.dart';
 import 'package:video_player/video_player.dart';
 
@@ -23,11 +23,38 @@ class _UniversalHomeState extends State<UniversalHome> {
 
   String _role = 'customer';
   String? _uid;
+  Future<void> _logout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed ?? false) {
+      await FirebaseAuth.instance.signOut();
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    addBusinessFieldsToAllUsers();
+    // addBusinessFieldsToAllUsers(); // Disabled due to Firestore permissions
     _loadUserRole();
   }
 
@@ -79,16 +106,37 @@ class _UniversalHomeState extends State<UniversalHome> {
 
   @override
   Widget build(BuildContext context) {
+    final showLogout = _role == 'fabric_seller';
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _currentIndex == 0 ? _buildAppBar() : null,
-      body: IndexedStack(
-        index: _currentIndex,
+      body: Column(
         children: [
-          const HomeFeedPage(),
-          const ExplorePage(),
-          _buildDashboard(),
-          const CustomerProfile(),
+          if (showLogout)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: OutlinedButton(
+                onPressed: _logout,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text('Logout'),
+              ),
+            ),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: [
+                const HomeFeedPage(),
+                const ExplorePage(),
+                _buildDashboard(),
+                const CustomerProfile(),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: _currentIndex == 0 ? _buildFAB() : null,
