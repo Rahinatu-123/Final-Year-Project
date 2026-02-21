@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
 import '../theme/app_theme.dart';
+import 'product_detail_screen.dart';
 
 class ShopGalleryPage extends StatefulWidget {
   const ShopGalleryPage({super.key});
@@ -216,7 +217,13 @@ class _ShopGalleryPageState extends State<ShopGalleryPage> {
   Widget _buildProductCard(Product product) {
     return GestureDetector(
       onTap: () {
-        // Navigate to product details (optional - can be implemented later)
+        // Navigate to product details
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailScreen(product: product),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(

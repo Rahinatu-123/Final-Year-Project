@@ -511,19 +511,19 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
   Stream<QuerySnapshot> _getMutualConnections() {
     if (currentUser == null) return const Stream.empty();
 
-    // Get users that current user is following, then filter for mutual connections
+    // Get users that current user is connected with
     return FirebaseFirestore.instance
         .collection('users')
         .doc(currentUser!.uid)
-        .collection('following')
+        .collection('connections')
         .snapshots()
-        .asyncExpand((followingSnapshot) async* {
-          // Get list of user IDs that current user is following
-          final followingIds = followingSnapshot.docs
+        .asyncExpand((connectionsSnapshot) async* {
+          // Get list of user IDs that current user is connected with
+          final connectedIds = connectionsSnapshot.docs
               .map((doc) => doc.id)
               .toList();
 
-          if (followingIds.isEmpty) {
+          if (connectedIds.isEmpty) {
             // Return empty result using a condition that won't match
             final emptySnap = await FirebaseFirestore.instance
                 .collection('users')
@@ -533,40 +533,10 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
             return;
           }
 
-          // Filter for mutual connections (those who follow back)
-          final mutualUsers = <String>[];
-
-          for (final userId in followingIds) {
-            try {
-              final followBackDoc = await FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(userId)
-                  .collection('following')
-                  .doc(currentUser!.uid)
-                  .get();
-
-              if (followBackDoc.exists) {
-                mutualUsers.add(userId);
-              }
-            } catch (e) {
-              print('Error checking follow back for $userId: $e');
-              continue;
-            }
-          }
-
-          // Return the mutual users' full documents
-          if (mutualUsers.isEmpty) {
-            final emptySnap = await FirebaseFirestore.instance
-                .collection('users')
-                .where(FieldPath.documentId, isEqualTo: '__nonexistent__')
-                .get();
-            yield emptySnap;
-            return;
-          }
-
+          // Return the connected users' full documents
           final result = await FirebaseFirestore.instance
               .collection('users')
-              .where(FieldPath.documentId, whereIn: mutualUsers)
+              .where(FieldPath.documentId, whereIn: connectedIds)
               .get();
           yield result;
         });

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import 'style_gallery.dart';
 import 'fabric_gallery.dart';
 import 'shop_gallery.dart';
+import 'chat.dart';
+import 'style_detail_page.dart';
 
 class ExplorePage extends StatefulWidget {
   const ExplorePage({super.key});
@@ -543,78 +547,13 @@ class _ExplorePageState extends State<ExplorePage> {
   }
 
   void _showStyleDetail(Map<String, dynamic> style) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SingleChildScrollView(
-            controller: scrollController,
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.textTertiary.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Image.network(
-                    style['imageUrl'] ?? '',
-                    height: 300,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(style['name'] ?? '', style: AppTextStyles.h3),
-                      const SizedBox(height: 12),
-                      Text(style['description'] ?? ''),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Try On feature coming soon!"),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.checkroom, size: 20),
-                          label: const Text("Try On This Style"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StyleDetailPage(
+          style: style,
+          category: style['category'],
+          styleId: style['id'], // Pass the document ID
         ),
       ),
     );
@@ -665,6 +604,53 @@ class _ExplorePageState extends State<ExplorePage> {
                       Text(fabric['name'] ?? '', style: AppTextStyles.h3),
                       const SizedBox(height: 12),
                       Text(fabric['description'] ?? ''),
+                      if (fabric['price'] != null) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'GHS ${fabric['price']}',
+                          style: AppTextStyles.h4.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                      if (fabric['sellerId'] != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.store,
+                                size: 20,
+                                color: AppColors.secondary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Seller',
+                                      style: AppTextStyles.labelSmall,
+                                    ),
+                                    Text(
+                                      fabric['sellerName'] ?? 'Fabric Seller',
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 24),
                       SizedBox(
                         width: double.infinity,
@@ -672,17 +658,12 @@ class _ExplorePageState extends State<ExplorePage> {
                         child: ElevatedButton.icon(
                           onPressed: () {
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Order this fabric coming soon!"),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
+                            _shareFabric(fabric);
                           },
-                          icon: const Icon(Icons.shopping_bag, size: 20),
-                          label: const Text("Order This Fabric"),
+                          icon: const Icon(Icons.share, size: 20),
+                          label: const Text("Share"),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.secondary,
+                            backgroundColor: AppColors.accent,
                             foregroundColor: Colors.white,
                           ),
                         ),
@@ -696,6 +677,188 @@ class _ExplorePageState extends State<ExplorePage> {
         ),
       ),
     );
+  }
+
+  void _shareStyle(Map<String, dynamic> style) {
+    final name = style['name'] ?? 'Check out this style';
+    final imageUrl = style['imageUrl'] ?? '';
+    final description = style['description'] ?? '';
+
+    final shareText = '$name\n\n$description\n\n$imageUrl';
+
+    Share.share(
+      shareText.isNotEmpty ? shareText : 'Check out this style on FashionHub',
+    );
+  }
+
+  void _shareFabric(Map<String, dynamic> fabric) {
+    final name = fabric['name'] ?? 'Check out this fabric';
+    final imageUrl = fabric['imageUrl'] ?? '';
+    final price = fabric['price'] ?? '';
+
+    final shareText = '$name\nPrice: GHS $price\n\n$imageUrl';
+
+    Share.share(
+      shareText.isNotEmpty ? shareText : 'Check out this fabric on FashionHub',
+    );
+  }
+
+  Future<void> _orderStyle(Map<String, dynamic> style) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to place an order')),
+      );
+      return;
+    }
+
+    final sellerId = style['sellerId'];
+    if (sellerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Seller information not available')),
+      );
+      return;
+    }
+
+    final sellerName = style['sellerName'] ?? 'Style Creator';
+    final styleName = style['name'] ?? 'Style';
+
+    // Create or get existing chat
+    try {
+      final existingChats = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: currentUser.uid)
+          .get();
+
+      String? chatId;
+      for (final doc in existingChats.docs) {
+        final participants = doc['participants'] as List<dynamic>? ?? [];
+        if (participants.contains(sellerId)) {
+          chatId = doc.id;
+          break;
+        }
+      }
+
+      if (chatId == null) {
+        // Create new chat
+        final newChat = await FirebaseFirestore.instance
+            .collection('chats')
+            .add({
+              'participants': [currentUser.uid, sellerId],
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'lastMessage': 'Hey! I\'m interested in: $styleName',
+              'unreadCount': {currentUser.uid: 0, sellerId: 0},
+            });
+        chatId = newChat.id;
+
+        // Add initial message
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(chatId)
+            .collection('messages')
+            .add({
+              'text':
+                  'Hey! I\'m interested in: $styleName. Can we discuss details about ordering?',
+              'senderId': currentUser.uid,
+              'senderName': currentUser.displayName ?? 'User',
+              'timestamp': FieldValue.serverTimestamp(),
+            });
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                ChatScreen(chatId: chatId!, otherUserName: sellerName),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error opening chat: $e')));
+    }
+  }
+
+  Future<void> _orderFabric(Map<String, dynamic> fabric) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login to place an order')),
+      );
+      return;
+    }
+
+    final sellerId = fabric['sellerId'];
+    if (sellerId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Seller information not available')),
+      );
+      return;
+    }
+
+    final sellerName = fabric['sellerName'] ?? 'Fabric Seller';
+    final fabricName = fabric['name'] ?? 'Fabric';
+
+    // Create or get existing chat
+    try {
+      final existingChats = await FirebaseFirestore.instance
+          .collection('chats')
+          .where('participants', arrayContains: currentUser.uid)
+          .get();
+
+      String? chatId;
+      for (final doc in existingChats.docs) {
+        final participants = doc['participants'] as List<dynamic>? ?? [];
+        if (participants.contains(sellerId)) {
+          chatId = doc.id;
+          break;
+        }
+      }
+
+      if (chatId == null) {
+        // Create new chat
+        final newChat = await FirebaseFirestore.instance
+            .collection('chats')
+            .add({
+              'participants': [currentUser.uid, sellerId],
+              'createdAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'lastMessage': 'Hey! I\'m interested in: $fabricName',
+              'unreadCount': {currentUser.uid: 0, sellerId: 0},
+            });
+        chatId = newChat.id;
+
+        // Add initial message
+        await FirebaseFirestore.instance
+            .collection('chats')
+            .doc(chatId)
+            .collection('messages')
+            .add({
+              'text':
+                  'Hey! I\'m interested in: $fabricName. Can you tell me more about this fabric and pricing?',
+              'senderId': currentUser.uid,
+              'senderName': currentUser.displayName ?? 'User',
+              'timestamp': FieldValue.serverTimestamp(),
+            });
+      }
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                ChatScreen(chatId: chatId!, otherUserName: sellerName),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error opening chat: $e')));
+    }
   }
 
   @override

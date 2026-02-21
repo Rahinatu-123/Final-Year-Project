@@ -6,6 +6,7 @@ import '../models/product.dart';
 import '../services/product_service.dart';
 import '../services/cloudinary_service.dart';
 import '../theme/app_theme.dart';
+import 'product_preview_screen.dart';
 
 class AddProductScreen extends StatefulWidget {
   final String sellerId;
@@ -489,9 +490,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
                 child: Text(
-                  widget.productToEdit != null
-                      ? 'Update Product'
-                      : 'Add Product',
+                  widget.productToEdit != null ? 'Update Product' : 'Preview',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -589,6 +588,38 @@ class _AddProductScreenState extends State<AddProductScreen> {
       return;
     }
 
+    // If editing, go directly to update (no preview)
+    if (widget.productToEdit != null) {
+      return _updateProduct();
+    }
+
+    // For new products, show preview
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProductPreviewScreen(
+          name: nameController.text,
+          description: descriptionController.text,
+          price: double.parse(priceController.text),
+          discountedPrice: discountPriceController.text.isEmpty
+              ? null
+              : double.tryParse(discountPriceController.text),
+          color: colorController.text.isEmpty ? null : colorController.text,
+          size: sizeController.text.isEmpty ? null : sizeController.text,
+          type: selectedType,
+          category: selectedCategory,
+          isSoldOut: isSoldOut,
+          isCustomizable: isCustomizable,
+          imageUrls: imageUrls,
+          selectedImagePaths: selectedImages.map((file) => file.path).toList(),
+          sellerId: widget.sellerId,
+          onConfirm: _addProduct,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addProduct() async {
     try {
       showDialog(
         context: context,
@@ -626,7 +657,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           : double.tryParse(discountPriceController.text);
 
       final product = Product(
-        id: widget.productToEdit?.id ?? '',
+        id: '',
         sellerId: widget.sellerId,
         sellerName: sellerName,
         type: selectedType,
@@ -647,29 +678,96 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ? isCustomizable
             : null,
         tags: [], // Can be extended later
-        createdAt: widget.productToEdit?.createdAt ?? DateTime.now(),
+        createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
-      if (widget.productToEdit != null) {
-        // Update existing product
-        await productService.updateProduct(product.id, product.toMap());
-      } else {
-        // Add new product
-        await productService.addProduct(product);
-      }
+      await productService.addProduct(product);
 
       Navigator.pop(context); // Close loading dialog
       Navigator.pop(context); // Close add product screen
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.productToEdit != null
-                ? 'Product updated successfully'
-                : 'Product added successfully',
-          ),
+        const SnackBar(content: Text('Product added successfully')),
+      );
+    } catch (e) {
+      Navigator.pop(context); // Close loading dialog
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _updateProduct() async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      // Upload new images
+      List<String> uploadedUrls = [...imageUrls];
+      for (var image in selectedImages) {
+        final url = await cloudinaryService.uploadImage(image);
+        if (url != null) {
+          uploadedUrls.add(url);
+        }
+      }
+
+      // Fetch seller name from Firestore
+      String sellerName = '';
+      try {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.sellerId)
+            .get();
+
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>;
+          sellerName = userData['fullName'] ?? userData['name'] ?? 'Unknown';
+        }
+      } catch (e) {
+        sellerName = 'Seller';
+      }
+
+      final double? discountPrice = discountPriceController.text.isEmpty
+          ? null
+          : double.tryParse(discountPriceController.text);
+
+      final product = Product(
+        id: widget.productToEdit!.id,
+        sellerId: widget.sellerId,
+        sellerName: sellerName,
+        type: selectedType,
+        name: nameController.text,
+        description: descriptionController.text,
+        imageUrls: uploadedUrls,
+        price: double.parse(priceController.text),
+        discountedPrice: discountPrice,
+        discountPercent: _calculateDiscountPercent(
+          double.parse(priceController.text),
+          discountPrice,
         ),
+        isSoldOut: isSoldOut,
+        category: selectedCategory,
+        color: colorController.text.isEmpty ? null : colorController.text,
+        size: sizeController.text.isEmpty ? null : sizeController.text,
+        isCustomizable: selectedType == ProductType.clothes
+            ? isCustomizable
+            : null,
+        tags: [],
+        createdAt: widget.productToEdit!.createdAt,
+        updatedAt: DateTime.now(),
+      );
+
+      await productService.updateProduct(product.id, product.toMap());
+
+      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context); // Close add product screen
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Product updated successfully')),
       );
     } catch (e) {
       Navigator.pop(context); // Close loading dialog

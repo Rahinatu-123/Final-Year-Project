@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 
 class FabricGalleryPage extends StatefulWidget {
@@ -306,6 +307,12 @@ class _FabricGalleryPageState extends State<FabricGalleryPage> {
                           ),
                         ),
                         const Spacer(),
+                        IconButton(
+                          icon: const Icon(Icons.share_outlined),
+                          onPressed: () {
+                            _shareFabric(fabric);
+                          },
+                        ),
                         ElevatedButton(
                           onPressed: () {
                             Navigator.pop(context);
@@ -339,6 +346,19 @@ class _FabricGalleryPageState extends State<FabricGalleryPage> {
           ],
         ),
       ),
+    );
+  }
+
+  void _shareFabric(Map<String, dynamic> fabric) {
+    final name = fabric['name'] ?? 'Check out this fabric';
+    final imageUrl = fabric['imageUrl'] ?? '';
+    final description = fabric['description'] ?? '';
+    final price = fabric['price'] ?? '';
+
+    final shareText = '$name\nPrice: GHS $price\n\n$description\n\n$imageUrl';
+
+    Share.share(
+      shareText.isNotEmpty ? shareText : 'Check out this fabric on FashionHub',
     );
   }
 }

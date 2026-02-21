@@ -896,6 +896,28 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             },
           ),
         ),
+        // Share button (top left)
+        Positioned(
+          top: 12,
+          left: 12,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              shape: BoxShape.circle,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => _sharePost(post),
+                customBorder: const CircleBorder(),
+                child: const Padding(
+                  padding: EdgeInsets.all(10.0),
+                  child: Icon(Icons.share, size: 22, color: AppColors.primary),
+                ),
+              ),
+            ),
+          ),
+        ),
         // Page indicator badge (only if more than one media)
         if (mediaUrls.length > 1)
           Positioned(

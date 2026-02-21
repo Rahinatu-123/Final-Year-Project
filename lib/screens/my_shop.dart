@@ -4,6 +4,7 @@ import '../models/product.dart';
 import '../services/product_service.dart';
 import '../theme/app_theme.dart';
 import 'add_product.dart';
+import 'product_detail_screen.dart';
 
 class MyShopScreen extends StatefulWidget {
   final String sellerId;
@@ -443,6 +444,28 @@ class _MyShopScreenState extends State<MyShopScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          ProductDetailScreen(product: product),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.preview),
+                label: const Text('View Preview'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
