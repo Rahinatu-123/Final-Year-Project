@@ -6,6 +6,7 @@ import 'order_list.dart';
 import 'order_details.dart';
 import 'my_shop.dart';
 import 'mutual_connections.dart';
+import 'my_clients.dart';
 
 class TailorDashboardScreen extends StatefulWidget {
   final String tailorId;
@@ -18,11 +19,20 @@ class TailorDashboardScreen extends StatefulWidget {
 
 class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
   late OrderService orderService;
+  String? tailorName;
 
   @override
   void initState() {
     super.initState();
     orderService = OrderService();
+    _loadTailorName();
+  }
+
+  Future<void> _loadTailorName() async {
+    // Placeholder - in production, fetch from Firestore
+    setState(() {
+      tailorName = 'Tailor';
+    });
   }
 
   @override
@@ -44,8 +54,8 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
             _buildDashboardCardsSection(),
             const SizedBox(height: 28),
 
-            // Urgent orders
-            _buildUrgentOrdersSection(),
+            // Statistics/Analytics
+            _buildAnalyticsSection(),
             const SizedBox(height: 28),
 
             // Recent pending orders
@@ -75,8 +85,10 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) =>
-                    OrderListScreen(tailorId: widget.tailorId),
+                builder: (context) => MyClientsScreen(
+                  tailorId: widget.tailorId,
+                  tailorName: tailorName ?? 'Tailor',
+                ),
               ),
             );
           },
@@ -205,150 +217,171 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
     );
   }
 
-  Widget _buildUrgentOrdersSection() {
+  Widget _buildAnalyticsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Urgent Orders',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        OrderListScreen(tailorId: widget.tailorId),
-                  ),
-                );
-              },
-              child: const Text(
-                'See all',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
+        const Text(
+          'Statistics',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
         ),
         const SizedBox(height: 12),
-        FutureBuilder<List<Order>>(
-          future: orderService.getUrgentOrders(widget.tailorId),
+        FutureBuilder<Map<String, dynamic>>(
+          future: _fetchAnalyticsData(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final urgentOrders = snapshot.data ?? [];
+            final data =
+                snapshot.data ??
+                {
+                  'totalOrders': 0,
+                  'completedOrders': 0,
+                  'pendingOrders': 0,
+                  'completionRate': 0.0,
+                  'avgDaysToComplete': 0.0,
+                };
 
-            if (urgentOrders.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D6A4F).withOpacity(0.05),
-                  border: Border.all(
-                    color: const Color(0xFF2D6A4F).withOpacity(0.2),
-                  ),
-                  borderRadius: BorderRadius.circular(12),
+            return GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: 1.3,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              children: [
+                _buildStatCard(
+                  title: 'Total Orders',
+                  value: '${data['totalOrders']}',
+                  icon: Icons.shopping_bag_outlined,
+                  color: AppColors.primary,
                 ),
-                child: const Text(
-                  'No urgent orders. Great work! 🎉',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
+                _buildStatCard(
+                  title: 'Completed',
+                  value: '${data['completedOrders']}',
+                  icon: Icons.check_circle_outline,
+                  color: const Color(0xFF2D6A4F),
                 ),
-              );
-            }
-
-            return Column(
-              children: urgentOrders.take(3).map((order) {
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => OrderDetailsScreen(order: order),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFBA1A1A).withOpacity(0.05),
-                      border: Border.all(
-                        color: const Color(0xFFBA1A1A).withOpacity(0.2),
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                order.clientName,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                order.style,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFBA1A1A).withOpacity(0.1),
-                            border: Border.all(
-                              color: const Color(0xFFBA1A1A).withOpacity(0.3),
-                            ),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${order.daysRemaining()} days',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFFBA1A1A),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
+                _buildStatCard(
+                  title: 'Completion Rate',
+                  value:
+                      '${(data['completionRate'] as double).toStringAsFixed(0)}%',
+                  icon: Icons.trending_up_outlined,
+                  color: const Color(0xFF1E88E5),
+                ),
+                _buildStatCard(
+                  title: 'Avg Days',
+                  value:
+                      '${(data['avgDaysToComplete'] as double).toStringAsFixed(1)}',
+                  icon: Icons.schedule_outlined,
+                  color: const Color(0xFFFFA500),
+                ),
+              ],
             );
           },
         ),
       ],
+    );
+  }
+
+  Future<Map<String, dynamic>> _fetchAnalyticsData() async {
+    try {
+      final orders = await orderService.getAllOrdersForTailor(widget.tailorId);
+
+      int totalOrders = orders.length;
+      int completedOrders = 0;
+      int pendingOrders = 0;
+      double avgDaysToComplete = 0.0;
+
+      for (var order in orders) {
+        if (order.status == OrderStatus.completed) {
+          completedOrders++;
+          if (order.completedAt != null) {
+            final days = order.completedAt!
+                .difference(order.createdAt)
+                .inDays
+                .toDouble();
+            avgDaysToComplete += days;
+          }
+        } else {
+          pendingOrders++;
+        }
+      }
+
+      if (completedOrders > 0) {
+        avgDaysToComplete = avgDaysToComplete / completedOrders;
+      }
+
+      double completionRate = totalOrders > 0
+          ? (completedOrders / totalOrders) * 100
+          : 0.0;
+
+      return {
+        'totalOrders': totalOrders,
+        'completedOrders': completedOrders,
+        'pendingOrders': pendingOrders,
+        'completionRate': completionRate,
+        'avgDaysToComplete': avgDaysToComplete,
+      };
+    } catch (e) {
+      print('Error fetching analytics: $e');
+      return {
+        'totalOrders': 0,
+        'completedOrders': 0,
+        'pendingOrders': 0,
+        'completionRate': 0.0,
+        'avgDaysToComplete': 0.0,
+      };
+    }
+  }
+
+  Widget _buildStatCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        border: Border.all(color: color.withOpacity(0.15)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 24),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

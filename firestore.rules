@@ -10,19 +10,33 @@ service cloud.firestore {
       // Following subcollection
       match /following/{followingId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && request.auth.uid == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
       
-      // Followers subcollection
+      // Followers subcollection - Allow any authenticated user to add themselves
       match /followers/{followerId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == followerId;
+        allow create: if request.auth != null && request.auth.uid == followerId;
+        allow update: if request.auth != null && request.auth.uid == followerId;
+        allow delete: if request.auth != null && (request.auth.uid == followerId || request.auth.uid == userId);
       }
       
       // Connections subcollection (user's following list)
       match /connections/{connectionId} {
         allow read: if request.auth != null;
-        allow write: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && request.auth.uid == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Shop Orders subcollection - for orders placed by/for this user
+      match /shop_orders/{orderId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update: if request.auth != null && request.auth.uid == userId;
+        allow delete: if request.auth != null && request.auth.uid == userId;
       }
       
       // All other subcollections
@@ -64,8 +78,16 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if true;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
-      allow update: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      allow update: if request.auth != null; // Allow any authenticated user to like/comment
       allow delete: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if request.auth != null;
+        allow update: if request.auth != null && request.auth.uid == resource.data.authorId;
+        allow delete: if request.auth != null && request.auth.uid == resource.data.authorId;
+      }
     }
 
     // Orders collection
@@ -114,6 +136,64 @@ service cloud.firestore {
       allow create: if request.auth != null && request.auth.uid == request.resource.data.sellerId;
       allow update: if request.auth != null && request.auth.uid == resource.data.sellerId;
       allow delete: if request.auth != null && request.auth.uid == resource.data.sellerId;
+    }
+
+    // Shop Orders collection - for shop product orders
+    match /shop_orders/{orderId} {
+      allow read: if request.auth != null && 
+        (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.tailorId);
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.customerId;
+      allow update: if request.auth != null && 
+        (request.auth.uid == resource.data.customerId || request.auth.uid == resource.data.tailorId);
+      allow delete: if request.auth != null && request.auth.uid == resource.data.customerId;
+    }
+
+    // Group Orders collection - collaborative ordering system
+    match /group_orders/{groupId} {
+      // Read: any authenticated user can browse all groups
+      allow read: if request.auth != null;
+      
+      // Create: any authenticated user can create groups
+      allow create: if request.auth != null;
+      
+      // Update: creator, members, or assigned professional can update
+      allow update: if request.auth != null && 
+        (resource.data.createdById == request.auth.uid || 
+         request.resource.data.members.any(m, m.userId == request.auth.uid) ||
+         resource.data.professionalId == request.auth.uid);
+      
+      // Only creator can delete
+      allow delete: if request.auth != null && resource.data.createdById == request.auth.uid;
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null;
+        allow update: if request.auth != null && request.auth.uid == resource.data.senderId;
+        allow delete: if request.auth != null && request.auth.uid == resource.data.senderId;
+      }
+    }
+
+    // Custom Orders collection - for tailors' manually added clients
+    match /custom_orders/{customOrderId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.tailorId;
+      allow update: if request.auth != null && resource.data.tailorId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.tailorId == request.auth.uid;
+    }
+
+    // Tailor's Clients collection - simplified client profiles
+    match /tailor_clients/{tailorId} {
+      // Allow parent document operations (needed for subcollection access)
+      allow read, write: if false;
+      
+      // Clients subcollection
+      match /clients/{clientId} {
+        allow read: if request.auth != null && request.auth.uid == tailorId;
+        allow create: if request.auth != null && request.auth.uid == tailorId;
+        allow update: if request.auth != null && request.auth.uid == tailorId;
+        allow delete: if request.auth != null && request.auth.uid == tailorId;
+      }
     }
 
     // Default: deny all other access

@@ -123,69 +123,110 @@ class UserProfilePage extends StatefulWidget {
 class _UserProfilePageState extends State<UserProfilePage> {
   final currentUser = FirebaseAuth.instance.currentUser;
   FirebaseFirestore get firestore => FirebaseFirestore.instance;
+  bool _isProcessing = false; // Track if follow/unfollow is in progress
 
   // ================= FOLLOW =================
 
   Future<void> followUser() async {
-    if (currentUser == null) return;
-    if (currentUser!.uid == widget.userId) return;
+    if (_isProcessing) return; // Prevent double-tap
 
-    final connectionRef = firestore
-        .collection('users')
-        .doc(currentUser!.uid)
-        .collection('connections')
-        .doc(widget.userId);
+    print('DEBUG: followUser() called');
+    setState(() => _isProcessing = true);
 
-    final followerRef = firestore
-        .collection('users')
-        .doc(widget.userId)
-        .collection('followers')
-        .doc(currentUser!.uid);
+    try {
+      if (currentUser == null) {
+        print('DEBUG: currentUser is null');
+        return;
+      }
+      if (currentUser!.uid == widget.userId) {
+        print('DEBUG: Cannot follow yourself');
+        return;
+      }
 
-    final alreadyFollowing = await connectionRef.get();
-    if (alreadyFollowing.exists) return;
+      final connectionRef = firestore
+          .collection('users')
+          .doc(currentUser!.uid)
+          .collection('connections')
+          .doc(widget.userId);
 
-    final batch = firestore.batch();
+      final followerRef = firestore
+          .collection('users')
+          .doc(widget.userId)
+          .collection('followers')
+          .doc(currentUser!.uid);
 
-    batch.set(connectionRef, {
-      'userId': widget.userId,
-      'userName': widget.userName,
-      'connectedAt': FieldValue.serverTimestamp(),
-    });
+      final alreadyFollowing = await connectionRef.get();
+      if (alreadyFollowing.exists) {
+        print('DEBUG: Already following this user');
+        return;
+      }
 
-    batch.set(followerRef, {
-      'userId': currentUser!.uid,
-      'userName': currentUser!.displayName ?? '',
-      'connectedAt': FieldValue.serverTimestamp(),
-    });
+      final batch = firestore.batch();
 
-    await batch.commit();
+      batch.set(connectionRef, {
+        'userId': widget.userId,
+        'userName': widget.userName,
+        'connectedAt': FieldValue.serverTimestamp(),
+      });
+
+      batch.set(followerRef, {
+        'userId': currentUser!.uid,
+        'userName': currentUser!.displayName ?? '',
+        'connectedAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+      print('DEBUG: Successfully followed user');
+    } catch (e) {
+      print('DEBUG: Error following user: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
   }
 
   // ================= UNFOLLOW =================
 
   Future<void> unfollowUser() async {
-    if (currentUser == null) return;
+    if (_isProcessing) return; // Prevent double-tap
 
-    final batch = firestore.batch();
+    print('DEBUG: unfollowUser() called');
+    setState(() => _isProcessing = true);
 
-    batch.delete(
-      firestore
-          .collection('users')
-          .doc(currentUser!.uid)
-          .collection('connections')
-          .doc(widget.userId),
-    );
+    try {
+      if (currentUser == null) {
+        print('DEBUG: currentUser is null');
+        return;
+      }
 
-    batch.delete(
-      firestore
-          .collection('users')
-          .doc(widget.userId)
-          .collection('followers')
-          .doc(currentUser!.uid),
-    );
+      final batch = firestore.batch();
 
-    await batch.commit();
+      batch.delete(
+        firestore
+            .collection('users')
+            .doc(currentUser!.uid)
+            .collection('connections')
+            .doc(widget.userId),
+      );
+
+      batch.delete(
+        firestore
+            .collection('users')
+            .doc(widget.userId)
+            .collection('followers')
+            .doc(currentUser!.uid),
+      );
+
+      await batch.commit();
+      print('DEBUG: Successfully unfollowed user');
+    } catch (e) {
+      print('DEBUG: Error unfollowing user: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
   }
 
   // ================= STREAMS =================
@@ -322,15 +363,40 @@ class _UserProfilePageState extends State<UserProfilePage> {
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: buttonColor,
+                            disabledBackgroundColor: Colors.grey[300],
                           ),
-                          onPressed: () {
-                            if (following) {
-                              unfollowUser();
-                            } else {
-                              followUser();
-                            }
-                          },
-                          child: Text(buttonText),
+                          onPressed: _isProcessing
+                              ? null
+                              : () {
+                                  // Handle button press based on state
+                                  if (following && followedBack) {
+                                    // Friends state - unfollow
+                                    unfollowUser();
+                                  } else if (following) {
+                                    // Following state - unfollow
+                                    unfollowUser();
+                                  } else if (followedBack) {
+                                    // Follow Back state - follow them back
+                                    followUser();
+                                  } else {
+                                    // Follow state - follow them
+                                    followUser();
+                                  }
+                                },
+                          child: _isProcessing
+                              ? SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      buttonColor == Colors.grey
+                                          ? Colors.black
+                                          : Colors.white,
+                                    ),
+                                  ),
+                                )
+                              : Text(buttonText),
                         ),
                       );
                     },

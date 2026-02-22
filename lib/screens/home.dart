@@ -509,9 +509,16 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Top Tailors", style: AppTextStyles.h4),
+              Text("Top Tailors & Fabric Sellers", style: AppTextStyles.h4),
               TextButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          const ExplorePage(filterByProfessionals: true),
+                    ),
+                  );
+                },
                 child: Text(
                   "See All",
                   style: AppTextStyles.labelLarge.copyWith(
@@ -524,46 +531,114 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
         ),
         const SizedBox(height: 12),
         SizedBox(
-          height: 100,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.only(left: 20),
-            itemCount: 6,
-            itemBuilder: (context, index) => Container(
-              margin: const EdgeInsets.only(right: 16),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.warmGradient,
-                      shape: BoxShape.circle,
-                    ),
+          height: 120,
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              // Filter users where role is not 'customer'
+              final tailors = snapshot.data!.docs
+                  .where((doc) {
+                    final role =
+                        (doc.data() as Map<String, dynamic>)['role'] ??
+                        'customer';
+                    return role.toString().toLowerCase() != 'customer';
+                  })
+                  .take(6)
+                  .toList();
+
+              if (tailors.isEmpty) {
+                return Center(
+                  child: Text(
+                    'No tailors or fabric sellers found',
+                    style: AppTextStyles.bodyMedium,
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(left: 20),
+                itemCount: tailors.length,
+                itemBuilder: (context, index) {
+                  final tailor = tailors[index].data() as Map<String, dynamic>;
+                  final name =
+                      (tailor['name'] ?? '').toString().trim().isNotEmpty
+                      ? tailor['name']
+                      : (tailor['firstName'] ?? 'User');
+                  final profileImage = tailor['profileImage'] ?? '';
+                  final role = tailor['role'] ?? 'tailor';
+                  final uid = tailors[index].id;
+
+                  return GestureDetector(
+                    onTap: () {
+                      // Navigate to tailor profile
+                      Navigator.of(
+                        context,
+                      ).pushNamed('/profile', arguments: uid);
+                    },
                     child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(
-                        color: AppColors.surface,
-                        shape: BoxShape.circle,
-                      ),
-                      child: CircleAvatar(
-                        radius: 30,
-                        backgroundColor: AppColors.surfaceVariant,
-                        backgroundImage: NetworkImage(
-                          'https://i.pravatar.cc/150?u=tailor$index',
-                        ),
+                      margin: const EdgeInsets.only(right: 16),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.warmGradient,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: AppColors.surface,
+                                shape: BoxShape.circle,
+                              ),
+                              child: CircleAvatar(
+                                radius: 30,
+                                backgroundColor: AppColors.surfaceVariant,
+                                backgroundImage: profileImage.isNotEmpty
+                                    ? NetworkImage(profileImage)
+                                    : null,
+                                child: profileImage.isEmpty
+                                    ? Text(name[0].toUpperCase())
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: 70,
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            role == 'tailor'
+                                ? 'Tailor'
+                                : role == 'seamstress'
+                                ? 'Seamstress'
+                                : 'Fabric Seller',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.textTertiary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tailor ${index + 1}',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+                  );
+                },
+              );
+            },
           ),
         ),
       ],
@@ -896,28 +971,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
             },
           ),
         ),
-        // Share button (top left)
-        Positioned(
-          top: 12,
-          left: 12,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              shape: BoxShape.circle,
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () => _sharePost(post),
-                customBorder: const CircleBorder(),
-                child: const Padding(
-                  padding: EdgeInsets.all(10.0),
-                  child: Icon(Icons.share, size: 22, color: AppColors.primary),
-                ),
-              ),
-            ),
-          ),
-        ),
+
         // Page indicator badge (only if more than one media)
         if (mediaUrls.length > 1)
           Positioned(
@@ -1207,24 +1261,38 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     onPressed: () async {
                       final text = _commentController.text.trim();
                       if (text.isEmpty) return;
-                      final user = FirebaseAuth.instance.currentUser;
-                      final commentRef = FirebaseFirestore.instance
-                          .collection('posts')
-                          .doc(postId)
-                          .collection('comments')
-                          .doc();
-                      await commentRef.set({
-                        'authorId': user?.uid,
-                        'authorName': user?.displayName ?? 'User',
-                        'content': text,
-                        'createdAt': Timestamp.now(),
-                      });
-                      // increment commentCount on post doc
-                      await FirebaseFirestore.instance
-                          .collection('posts')
-                          .doc(postId)
-                          .update({'commentCount': FieldValue.increment(1)});
-                      _commentController.clear();
+                      try {
+                        final user = FirebaseAuth.instance.currentUser;
+                        if (user == null) return;
+                        final commentRef = FirebaseFirestore.instance
+                            .collection('posts')
+                            .doc(postId)
+                            .collection('comments')
+                            .doc();
+                        await commentRef.set({
+                          'authorId': user.uid,
+                          'authorName': user.displayName ?? 'User',
+                          'content': text,
+                          'createdAt': Timestamp.now(),
+                        });
+                        // increment commentCount on post doc
+                        await FirebaseFirestore.instance
+                            .collection('posts')
+                            .doc(postId)
+                            .update({'commentCount': FieldValue.increment(1)});
+                        _commentController.clear();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Comment added')),
+                          );
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Error adding comment: $e')),
+                          );
+                        }
+                      }
                     },
                   ),
                 ],

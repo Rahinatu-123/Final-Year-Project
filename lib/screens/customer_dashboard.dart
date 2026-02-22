@@ -1,14 +1,32 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
+import '../models/shop_order.dart';
+import '../services/shop_order_service.dart';
 import 'visualize_style.dart';
 import 'style_gallery.dart';
 import 'sew_with_me.dart';
+import 'buy_fabric_with_me.dart';
 import 'explore.dart';
 import 'overlay.dart'; // AICameraOverlay for measurement capture
 import 'package:fashionhub/screens/mutual_connections.dart';
+import 'shop_order_detail.dart';
 
-class CustomerDashboard extends StatelessWidget {
+class CustomerDashboard extends StatefulWidget {
   const CustomerDashboard({super.key});
+
+  @override
+  State<CustomerDashboard> createState() => _CustomerDashboardState();
+}
+
+class _CustomerDashboardState extends State<CustomerDashboard> {
+  late ShopOrderService _orderService;
+
+  @override
+  void initState() {
+    super.initState();
+    _orderService = ShopOrderService();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +64,15 @@ class CustomerDashboard extends StatelessWidget {
                     children: [
                       Text("Recent Orders", style: AppTextStyles.h4),
                       TextButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const CustomerOrdersListScreen(),
+                            ),
+                          );
+                        },
                         child: Text(
                           "View All",
                           style: AppTextStyles.labelLarge.copyWith(
@@ -57,28 +83,87 @@ class CustomerDashboard extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _buildOrderTile(
-                    "Bridal Asoebi",
-                    "In Progress",
-                    "Oct 24",
-                    0.65,
-                    AppColors.coral,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOrderTile(
-                    "Casual Suit",
-                    "Completed",
-                    "Oct 12",
-                    1.0,
-                    AppColors.success,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildOrderTile(
-                    "Kente Dress",
-                    "Pending",
-                    "Oct 28",
-                    0.2,
-                    AppColors.gold,
+                  StreamBuilder<List<ShopOrder>>(
+                    stream: _orderService.getCustomerOrdersStream(
+                      FirebaseAuth.instance.currentUser?.uid ?? '',
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Error loading orders: ${snapshot.error}',
+                          ),
+                        );
+                      }
+
+                      final orders = snapshot.data ?? [];
+
+                      if (orders.isEmpty) {
+                        return Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.md,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'No orders yet. Start shopping!',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      // Filter out cancelled orders and show only top 3 on dashboard
+                      final activeOrders = orders
+                          .where(
+                            (order) =>
+                                order.status != ShopOrderStatus.cancelled,
+                          )
+                          .toList();
+                      final recentOrders = activeOrders.take(3).toList();
+
+                      if (recentOrders.isEmpty) {
+                        return Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.md,
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'No active orders',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      return Column(
+                        children: List.generate(recentOrders.length, (index) {
+                          final order = recentOrders[index];
+                          return Column(
+                            children: [
+                              _buildOrderTile(context, order),
+                              if (index < recentOrders.length - 1)
+                                const SizedBox(height: 12),
+                            ],
+                          );
+                        }),
+                      );
+                    },
                   ),
                 ],
               ),
@@ -183,13 +268,10 @@ class CustomerDashboard extends StatelessWidget {
         ),
         _buildActionCard(
           context,
-          "Sew With\nMe",
+          "Group\nOrder",
           Icons.people,
           AppColors.gold,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SewWithMePage()),
-          ),
+          () => _showGroupOrderDialog(),
         ),
       ],
     );
@@ -314,81 +396,185 @@ class CustomerDashboard extends StatelessWidget {
     );
   }
 
-  Widget _buildOrderTile(
-    String name,
-    String status,
-    String date,
-    double progress,
-    Color statusColor,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.md),
-        boxShadow: AppShadows.soft,
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
-              borderRadius: BorderRadius.circular(AppBorderRadius.sm),
-            ),
-            child: const Icon(Icons.checkroom, color: AppColors.textPrimary),
+  Widget _buildOrderTile(BuildContext context, ShopOrder order) {
+    // Map order status to progress and color
+    final statusInfo = _getStatusInfo(order.status);
+    final progress = statusInfo['progress'] as double;
+    final statusColor = statusInfo['color'] as Color;
+    final statusLabel = statusInfo['label'] as String;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                ShopOrderDetailScreen(orderId: order.id, isForTailor: false),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    fontWeight: FontWeight.w600,
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.md),
+          boxShadow: AppShadows.soft,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceVariant,
+                borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+              ),
+              child: const Icon(Icons.checkroom, color: AppColors.textPrimary),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    order.productName,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(AppBorderRadius.xs),
-                      ),
-                      child: Text(
-                        status,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: statusColor,
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.xs,
+                          ),
+                        ),
+                        child: Text(
+                          statusLabel,
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: statusColor,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(date, style: AppTextStyles.labelSmall),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                // Progress bar
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: AppColors.surfaceVariant,
-                    valueColor: AlwaysStoppedAnimation<Color>(statusColor),
-                    minHeight: 4,
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatDate(order.createdAt),
+                        style: AppTextStyles.labelSmall,
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  // Progress bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: AppColors.surfaceVariant,
+                      valueColor: AlwaysStoppedAnimation<Color>(statusColor),
+                      minHeight: 4,
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 12),
+            Icon(Icons.chevron_right, color: AppColors.textTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _getStatusInfo(ShopOrderStatus status) {
+    switch (status) {
+      case ShopOrderStatus.pending:
+        return {'label': 'Pending', 'color': AppColors.gold, 'progress': 0.2};
+      case ShopOrderStatus.confirmed:
+        return {
+          'label': 'Confirmed',
+          'color': AppColors.accent,
+          'progress': 0.4,
+        };
+      case ShopOrderStatus.inProgress:
+        return {
+          'label': 'In Progress',
+          'color': AppColors.coral,
+          'progress': 0.65,
+        };
+      case ShopOrderStatus.ready:
+        return {
+          'label': 'Ready',
+          'color': AppColors.accentLight,
+          'progress': 0.85,
+        };
+      case ShopOrderStatus.completed:
+        return {
+          'label': 'Completed',
+          'color': AppColors.success,
+          'progress': 1.0,
+        };
+      case ShopOrderStatus.cancelled:
+        return {
+          'label': 'Cancelled',
+          'color': AppColors.error,
+          'progress': 0.0,
+        };
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays == 0) {
+      return 'Today';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else {
+      return '${date.month}/${date.day}';
+    }
+  }
+
+  void _showGroupOrderDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Group Order'),
+        content: const Text('What would you like to do?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SewWithMePage()),
+              );
+            },
+            child: const Text('Sew with me'),
           ),
-          const SizedBox(width: 12),
-          Icon(Icons.chevron_right, color: AppColors.textTertiary),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BuyFabricWithMePage(),
+                ),
+              );
+            },
+            child: const Text('Buy Fabric with me'),
+          ),
         ],
       ),
     );
@@ -429,6 +615,254 @@ class _MeasureItem extends StatelessWidget {
           style: AppTextStyles.labelSmall.copyWith(color: Colors.white54),
         ),
       ],
+    );
+  }
+}
+
+/// Customer Orders List Screen - Shows all orders
+class CustomerOrdersListScreen extends StatefulWidget {
+  const CustomerOrdersListScreen({super.key});
+
+  @override
+  State<CustomerOrdersListScreen> createState() =>
+      _CustomerOrdersListScreenState();
+}
+
+class _CustomerOrdersListScreenState extends State<CustomerOrdersListScreen> {
+  late ShopOrderService _orderService;
+
+  @override
+  void initState() {
+    super.initState();
+    _orderService = ShopOrderService();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('My Orders'),
+        backgroundColor: Colors.white,
+        elevation: 1,
+        centerTitle: true,
+        foregroundColor: AppColors.textPrimary,
+      ),
+      body: StreamBuilder<List<ShopOrder>>(
+        stream: _orderService.getCustomerOrdersStream(
+          FirebaseAuth.instance.currentUser?.uid ?? '',
+        ),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: AppColors.textTertiary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Error loading orders', style: AppTextStyles.bodyMedium),
+                ],
+              ),
+            );
+          }
+
+          final orders = snapshot.data ?? [];
+          // Filter out cancelled orders
+          final activeOrders = orders
+              .where((order) => order.status != ShopOrderStatus.cancelled)
+              .toList();
+
+          if (activeOrders.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.shopping_bag_outlined,
+                    size: 64,
+                    color: AppColors.textTertiary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text('No orders yet', style: AppTextStyles.h4),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Start shopping to see your orders here',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: activeOrders.length,
+            itemBuilder: (context, index) {
+              final order = activeOrders[index];
+              final statusInfo = _getStatusInfo(order.status);
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ShopOrderDetailScreen(
+                        orderId: order.id,
+                        isForTailor: false,
+                      ),
+                    ),
+                  );
+                },
+                child: Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                order.productName,
+                                style: AppTextStyles.bodyLarge.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: (statusInfo['color'] as Color)
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(
+                                  AppBorderRadius.xs,
+                                ),
+                              ),
+                              child: Text(
+                                statusInfo['label'] as String,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: statusInfo['color'] as Color,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Qty: ${order.quantity}',
+                              style: AppTextStyles.bodyMedium,
+                            ),
+                            Text(
+                              'GHS ${order.getTotalPrice().toStringAsFixed(2)}',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _formatDate(order.createdAt),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Map<String, dynamic> _getStatusInfo(ShopOrderStatus status) {
+    switch (status) {
+      case ShopOrderStatus.pending:
+        return {'label': 'Pending', 'color': AppColors.gold};
+      case ShopOrderStatus.confirmed:
+        return {'label': 'Confirmed', 'color': AppColors.accent};
+      case ShopOrderStatus.inProgress:
+        return {'label': 'In Progress', 'color': AppColors.coral};
+      case ShopOrderStatus.ready:
+        return {'label': 'Ready', 'color': AppColors.accentLight};
+      case ShopOrderStatus.completed:
+        return {'label': 'Completed', 'color': AppColors.success};
+      case ShopOrderStatus.cancelled:
+        return {'label': 'Cancelled', 'color': AppColors.error};
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final difference = now.difference(date);
+
+    if (difference.inDays == 0) {
+      return 'Today';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else {
+      return '${date.month}/${date.day}/${date.year}';
+    }
+  }
+
+  void _showGroupOrderDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Group Order'),
+        content: const Text('What would you like to do?'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SewWithMePage()),
+              );
+            },
+            child: const Text('Sew with me'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // Navigate to Buy Fabric page
+              // TODO: Update with actual page route when available
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Buy Fabric feature coming soon')),
+              );
+            },
+            child: const Text('Buy Fabric with me'),
+          ),
+        ],
+      ),
     );
   }
 }

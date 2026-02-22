@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
+import 'chat.dart';
 
 class FabricGalleryPage extends StatefulWidget {
   const FabricGalleryPage({
@@ -350,6 +352,311 @@ class _FabricGalleryPageState extends State<FabricGalleryPage> {
   }
 
   void _shareFabric(Map<String, dynamic> fabric) {
+    _showFabricShareDialog(fabric);
+  }
+
+  void _showFabricShareDialog(Map<String, dynamic> fabric) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Column(
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.textTertiary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Share Fabric', style: AppTextStyles.h4),
+                ],
+              ),
+            ),
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Section: Share with Connections
+                    Padding(
+                      padding: const EdgeInsets.only(top: 16, bottom: 12),
+                      child: Text(
+                        'Share with Connections',
+                        style: AppTextStyles.h4.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    _buildFabricConnectionsList(currentUser.uid, fabric),
+                    const SizedBox(height: 24),
+                    // Section: Other Share Options (no label)
+                    _buildFabricOtherShareOptions(fabric),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFabricConnectionsList(
+    String userId,
+    Map<String, dynamic> fabric,
+  ) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('connections')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: CircularProgressIndicator(color: AppColors.primary),
+          );
+        }
+
+        final connections = snapshot.data!.docs;
+
+        if (connections.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'No connections yet. Follow people to share with them!',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          );
+        }
+
+        return SizedBox(
+          height: 100,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            itemCount: connections.length,
+            itemBuilder: (context, index) {
+              final connection =
+                  connections[index].data() as Map<String, dynamic>;
+              final connectionUserId = connections[index].id;
+              final connectionName = connection['userName'] ?? 'User';
+
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(connectionUserId)
+                    .get(),
+                builder: (context, userSnapshot) {
+                  if (!userSnapshot.hasData) {
+                    return const SizedBox.shrink();
+                  }
+
+                  final userData =
+                      userSnapshot.data!.data() as Map<String, dynamic>;
+                  final profileImage = userData['profileImage'] ?? '';
+                  final fullName = userData['fullName'] ?? connectionName;
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _sendFabricViaChat(
+                            connectionUserId,
+                            fullName,
+                            fabric,
+                          ),
+                          child: Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.primary.withOpacity(0.1),
+                              border: Border.all(
+                                color: AppColors.primary,
+                                width: 2,
+                              ),
+                            ),
+                            child: profileImage.isNotEmpty
+                                ? ClipOval(
+                                    child: Image.network(
+                                      profileImage,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          const Icon(Icons.person),
+                                    ),
+                                  )
+                                : const Icon(Icons.person, size: 30),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: 70,
+                          child: Text(
+                            fullName,
+                            style: AppTextStyles.labelSmall,
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFabricOtherShareOptions(Map<String, dynamic> fabric) {
+    final shareOptions = [
+      {
+        'icon': Icons.share_outlined,
+        'label': 'WhatsApp',
+        'color': const Color(0xFF25D366),
+      },
+      {
+        'icon': Icons.photo_camera_outlined,
+        'label': 'Instagram Story',
+        'color': const Color(0xFFE4405F),
+      },
+      {
+        'icon': Icons.mail_outline,
+        'label': 'Email',
+        'color': AppColors.primary,
+      },
+      {
+        'icon': Icons.ios_share,
+        'label': 'More',
+        'color': AppColors.textSecondary,
+      },
+    ];
+
+    return Wrap(
+      alignment: WrapAlignment.spaceEvenly,
+      spacing: 16,
+      runSpacing: 12,
+      children: shareOptions
+          .map(
+            (option) => GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                if (option['label'] == 'More') {
+                  _shareFabricDefault(fabric);
+                }
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: (option['color'] as Color).withOpacity(0.15),
+                    ),
+                    child: Icon(
+                      option['icon'] as IconData,
+                      color: option['color'] as Color,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: 60,
+                    child: Text(
+                      option['label'] as String,
+                      style: AppTextStyles.labelSmall,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  void _sendFabricViaChat(
+    String userId,
+    String userName,
+    Map<String, dynamic> fabric,
+  ) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    // Create chat ID (combination of both user IDs, sorted for consistency)
+    final ids = [currentUser.uid, userId];
+    ids.sort();
+    final chatId = '${ids[0]}_${ids[1]}';
+
+    final fabricName = fabric['name'] ?? 'Check out this fabric';
+    final imageUrl = fabric['imageUrl'] ?? '';
+    final price = fabric['price'] ?? '';
+
+    final shareMessage =
+        'Check out this fabric: $fabricName\nPrice: GHS $price\n$imageUrl';
+
+    // Send the message via chat
+    FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .add({
+          'text': shareMessage,
+          'senderId': currentUser.uid,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+    FirebaseFirestore.instance.collection('chats').doc(chatId).set({
+      'lastMessage': fabricName,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'participants': FieldValue.arrayUnion([currentUser.uid, userId]),
+    }, SetOptions(merge: true));
+
+    Navigator.pop(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Sent to $userName'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _shareFabricDefault(Map<String, dynamic> fabric) {
     final name = fabric['name'] ?? 'Check out this fabric';
     final imageUrl = fabric['imageUrl'] ?? '';
     final description = fabric['description'] ?? '';

@@ -6,14 +6,14 @@ import '../models/group_order.dart';
 import '../services/group_order_service.dart';
 import 'group_detail.dart';
 
-class SewWithMePage extends StatefulWidget {
-  const SewWithMePage({super.key});
+class BuyFabricWithMePage extends StatefulWidget {
+  const BuyFabricWithMePage({super.key});
 
   @override
-  State<SewWithMePage> createState() => _SewWithMePageState();
+  State<BuyFabricWithMePage> createState() => _BuyFabricWithMePageState();
 }
 
-class _SewWithMePageState extends State<SewWithMePage> {
+class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
   bool _showCreateForm = false;
   final GroupOrderService _groupOrderService = GroupOrderService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -23,9 +23,9 @@ class _SewWithMePageState extends State<SewWithMePage> {
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
   late TextEditingController _deadlineController;
-  String? _selectedTailorId;
-  String? _selectedTailorName;
-  String? _selectedTailorImage;
+  String? _selectedSellerId;
+  String? _selectedSellerName;
+  String? _selectedSellerImage;
 
   @override
   void initState() {
@@ -55,7 +55,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Sew With Me",
+          "Buy Fabric With Me",
           style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
@@ -83,14 +83,14 @@ class _SewWithMePageState extends State<SewWithMePage> {
           const Padding(
             padding: EdgeInsets.all(20),
             child: Text(
-              "Browse Groups",
+              "Browse Fabric Groups",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: StreamBuilder<List<GroupOrder>>(
-              stream: _groupOrderService.getAllGroups(GroupOrderType.sewing),
+              stream: _groupOrderService.getAllGroups(GroupOrderType.fabric),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const SizedBox(
@@ -117,7 +117,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
                     padding: EdgeInsets.symmetric(vertical: 40),
                     child: Center(
                       child: Text(
-                        'No groups available yet. Create one!',
+                        'No fabric groups available yet. Create one!',
                         style: TextStyle(color: AppColors.textSecondary),
                       ),
                     ),
@@ -135,7 +135,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
               },
             ),
           ),
-          const SizedBox(height: 100),
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -154,7 +154,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            "Group Orders, Better Prices",
+            "Bulk Fabric Orders, Better Prices",
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -163,7 +163,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            "Join or create group orders with friends and get discounts on custom tailoring.",
+            "Join or create group orders with friends and get discounts on bulk fabric purchases.",
             style: TextStyle(
               color: Colors.white.withOpacity(0.9),
               fontSize: 14,
@@ -213,7 +213,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
                       height: 80,
                       width: 80,
                       color: AppColors.surfaceVariant,
-                      child: const Icon(Icons.checkroom),
+                      child: const Icon(Icons.close_fullscreen),
                     ),
                   ),
                 ),
@@ -295,7 +295,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                "Create Sew With Me Group",
+                "Create Fabric Group",
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               IconButton(
@@ -307,17 +307,17 @@ class _SewWithMePageState extends State<SewWithMePage> {
           const SizedBox(height: 24),
           _buildFormField(
             "Group Name",
-            "e.g. Bridal Asoebi 2025",
+            "e.g. Lace Bulk Order 2025",
             _nameController,
           ),
           const SizedBox(height: 16),
-          _buildTailorSelector(),
+          _buildSellerSelector(),
           const SizedBox(height: 16),
           _buildDatePicker(),
           const SizedBox(height: 16),
           _buildFormField(
             "Description",
-            "Describe your group...",
+            "Describe your fabric group...",
             _descriptionController,
             maxLines: 3,
           ),
@@ -353,12 +353,12 @@ class _SewWithMePageState extends State<SewWithMePage> {
     );
   }
 
-  Widget _buildTailorSelector() {
+  Widget _buildSellerSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "Select Tailor/Professional",
+          "Select Fabric Seller",
           style: AppTextStyles.labelLarge.copyWith(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
@@ -369,7 +369,10 @@ class _SewWithMePageState extends State<SewWithMePage> {
             boxShadow: AppShadows.soft,
           ),
           child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore.collection('users').snapshots(),
+            stream: _firestore
+                .collection('users')
+                .where('role', isEqualTo: 'fabric_seller')
+                .snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
                 return const Padding(
@@ -381,14 +384,10 @@ class _SewWithMePageState extends State<SewWithMePage> {
                 );
               }
 
-              // Filter for tailor and seamstress roles
-              final tailors = snapshot.data!.docs.where((doc) {
-                final role = (doc['role'] ?? '').toString().toLowerCase();
-                return role == 'tailor' || role == 'seamstress';
-              }).toList();
+              final sellers = snapshot.data!.docs;
 
               return DropdownButtonFormField<String>(
-                value: _selectedTailorId,
+                value: _selectedSellerId,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(
@@ -396,8 +395,8 @@ class _SewWithMePageState extends State<SewWithMePage> {
                     vertical: 16,
                   ),
                 ),
-                hint: const Text("Choose a tailor"),
-                items: tailors.map((doc) {
+                hint: const Text("Choose a fabric seller"),
+                items: sellers.map((doc) {
                   return DropdownMenuItem(
                     value: doc.id,
                     child: Text(
@@ -407,14 +406,14 @@ class _SewWithMePageState extends State<SewWithMePage> {
                 }).toList(),
                 onChanged: (value) {
                   if (value != null) {
-                    final tailor = tailors.firstWhere((doc) => doc.id == value);
+                    final seller = sellers.firstWhere((doc) => doc.id == value);
                     setState(() {
-                      _selectedTailorId = value;
-                      _selectedTailorName =
-                          tailor['fullName'] ??
-                          tailor['firstName'] ??
+                      _selectedSellerId = value;
+                      _selectedSellerName =
+                          seller['fullName'] ??
+                          seller['firstName'] ??
                           'Unknown';
-                      _selectedTailorImage = tailor['profileImage'] ?? '';
+                      _selectedSellerImage = seller['profileImage'] ?? '';
                     });
                   }
                 },
@@ -523,7 +522,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
 
   Future<void> _createGroup() async {
     if (_nameController.text.isEmpty ||
-        _selectedTailorId == null ||
+        _selectedSellerId == null ||
         _deadlineController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -550,12 +549,12 @@ class _SewWithMePageState extends State<SewWithMePage> {
       final group = GroupOrder(
         id: '',
         name: _nameController.text,
-        type: GroupOrderType.sewing,
+        type: GroupOrderType.fabric,
         createdById: user.uid,
         createdByName: user.displayName ?? 'Unknown',
-        professionalId: _selectedTailorId!,
-        professionalName: _selectedTailorName!,
-        professionalImage: _selectedTailorImage ?? '',
+        professionalId: _selectedSellerId!,
+        professionalName: _selectedSellerName!,
+        professionalImage: _selectedSellerImage ?? '',
         description: _descriptionController.text,
         discountPercentage: 10.0,
         maxParticipants: 10,
@@ -579,7 +578,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("Group created successfully!"),
+            content: Text("Fabric group created successfully!"),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
           ),
@@ -589,9 +588,9 @@ class _SewWithMePageState extends State<SewWithMePage> {
         _nameController.clear();
         _descriptionController.clear();
         _deadlineController.clear();
-        _selectedTailorId = null;
-        _selectedTailorName = null;
-        _selectedTailorImage = null;
+        _selectedSellerId = null;
+        _selectedSellerName = null;
+        _selectedSellerImage = null;
 
         setState(() => _showCreateForm = false);
       }
