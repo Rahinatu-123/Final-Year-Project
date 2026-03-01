@@ -1,0 +1,80 @@
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+
+class TryOnService {
+  static const String baseUrl =
+      'https://unexcepted-coaly-candie.ngrok-free.dev';
+
+  // Check if the model is loaded and ready
+  static Future<bool> isModelReady() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/health'),
+            headers: {'ngrok-skip-browser-warning': 'true'},
+          )
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        // Response looks like: {"model_ready": true, "error": null}
+        return response.body.contains('"model_ready": true') ||
+            response.body.contains('"model_ready":true');
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Send person + garment images and get the try-on result
+  // personImagePath  -- file path to person photo
+  // garmentImagePath -- file path to garment photo
+  // category         -- 'Upper-body', 'Lower-body', or 'Dresses'
+  static Future<Uint8List> tryOn({
+    required String personImagePath,
+    required String garmentImagePath,
+    String category = 'Upper-body',
+    int nSteps = 20,
+    double imageScale = 2.5,
+    int seed = 42,
+    String resolution = '768x1024',
+  }) async {
+    // Check model is ready before sending
+    final ready = await isModelReady();
+    if (!ready) {
+      throw Exception('Model is not ready yet. Please wait and try again.');
+    }
+
+    final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/tryon'));
+
+    // Required header to bypass ngrok browser warning page
+    request.headers['ngrok-skip-browser-warning'] = 'true';
+
+    // Attach the two image files
+    request.files.add(
+      await http.MultipartFile.fromPath('person', personImagePath),
+    );
+    request.files.add(
+      await http.MultipartFile.fromPath('garment', garmentImagePath),
+    );
+
+    // Optional parameters
+    request.fields['category'] = category;
+    request.fields['n_steps'] = nSteps.toString();
+    request.fields['image_scale'] = imageScale.toString();
+    request.fields['seed'] = seed.toString();
+    request.fields['resolution'] = resolution;
+
+    // Inference takes 30-60 seconds so use a long timeout
+    final streamedResponse = await request.send().timeout(
+      const Duration(seconds: 120),
+    );
+
+    if (streamedResponse.statusCode == 200) {
+      return await streamedResponse.stream.toBytes();
+    } else {
+      final body = await streamedResponse.stream.bytesToString();
+      throw Exception('Try-on failed (${streamedResponse.statusCode}): $body');
+    }
+  }
+}

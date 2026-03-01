@@ -2,20 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../theme/app_theme.dart';
 import 'visualize_style.dart';
+import 'try_on.dart';
 import 'chat.dart';
 
 class StyleDetailPage extends StatefulWidget {
   final Map<String, dynamic> style;
   final String? category;
-  final String? styleId; // Add document ID
+  final String? styleId;
+  final String? personImagePath;
 
   const StyleDetailPage({
     super.key,
     required this.style,
     this.category,
     this.styleId,
+    this.personImagePath,
   });
 
   @override
@@ -40,21 +46,9 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.checkroom),
-                tooltip: 'Try On',
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const VisualizeStylePage(),
-                    ),
-                  );
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.share),
-                tooltip: 'Share',
-                onPressed: () => _shareStyle(widget.style),
+                icon: const Icon(Icons.save_alt),
+                tooltip: 'Save to Device',
+                onPressed: () => _saveStyleToDevice(widget.style),
               ),
             ],
           ),
@@ -185,14 +179,45 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                         children: [
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const VisualizeStylePage(),
-                                  ),
-                                );
+                              onPressed: () async {
+                                try {
+                                  final styleImageUrl =
+                                      widget.style['imageUrl'] as String?;
+
+                                  if (styleImageUrl == null ||
+                                      styleImageUrl.isEmpty) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Style image URL not found',
+                                        ),
+                                        backgroundColor: Colors.red,
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  if (!mounted) return;
+
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => TryOnScreen(
+                                        personImagePath: widget.personImagePath,
+                                        garmentImagePath: styleImageUrl,
+                                      ),
+                                    ),
+                                  );
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Error: ${e.toString()}'),
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
                               },
                               icon: const Icon(Icons.auto_awesome),
                               label: const Text('Try On'),
@@ -764,5 +789,81 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
     Share.share(
       shareText.isNotEmpty ? shareText : 'Check out this style on FashionHub',
     );
+  }
+
+  Future<void> _saveStyleToDevice(Map<String, dynamic> style) async {
+    try {
+      final imageUrl = style['imageUrl'] as String?;
+      final styleName = style['name'] as String? ?? 'style';
+
+      if (imageUrl == null || imageUrl.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No image to save'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Saving style to device...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+
+      // Download the image
+      final response = await http.get(Uri.parse(imageUrl));
+
+      if (response.statusCode == 200) {
+        // Get documents directory
+        final documentsDir = await getApplicationDocumentsDirectory();
+        final fashionHubDir = Directory(
+          '${documentsDir.path}/FashionHub/Styles',
+        );
+
+        // Create directory if it doesn't exist
+        if (!await fashionHubDir.exists()) {
+          await fashionHubDir.create(recursive: true);
+        }
+
+        // Create filename with timestamp
+        final filename =
+            '${styleName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final filePath = '${fashionHubDir.path}/$filename';
+
+        // Save image to file
+        final file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Style saved to Downloads'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to download image'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving style: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }

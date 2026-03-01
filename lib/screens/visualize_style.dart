@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fashionhub/screens/style_gallery.dart';
+import 'try_on.dart';
 import '../theme/app_theme.dart';
 
 // =====================================================
@@ -134,16 +135,16 @@ class _VisualizeStylePageState extends State<VisualizeStylePage> {
                         children: [
                           Expanded(
                             child: _buildActionButton(
-                              "Upload Style",
-                              Icons.style,
-                              AppColors.coral,
-                              () => _showUploadStyleDialog(),
+                              "Try On",
+                              Icons.checkroom,
+                              AppColors.accent,
+                              () => _navigateToTryOn(),
                             ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: _buildActionButton(
-                              "Select Style",
+                              "View Style",
                               Icons.style_outlined,
                               AppColors.gold,
                               () => _navigateToStyleGallery(),
@@ -223,19 +224,12 @@ class _VisualizeStylePageState extends State<VisualizeStylePage> {
       builder: (context) => AlertDialog(
         title: const Text("Upload Style"),
         content: const Text(
-          "Style upload feature coming soon! For now, please select a style from our gallery.",
+          "You can now upload your own styles and share them with the community!",
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text("OK"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _navigateToStyleGallery();
-            },
-            child: const Text("Go to Gallery"),
           ),
         ],
       ),
@@ -246,8 +240,28 @@ class _VisualizeStylePageState extends State<VisualizeStylePage> {
     Navigator.push(
       context,
       MaterialPageRoute(
+        builder: (context) => StyleGalleryPage(
+          title: null,
+          categories: [],
+          personImagePath: _selectedImage?.path,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToTryOn() {
+    if (_selectedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an image first')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
         builder: (context) =>
-            const StyleGalleryPage(title: null, categories: []),
+            TryOnScreen(personImagePath: _selectedImage!.path),
       ),
     );
   }

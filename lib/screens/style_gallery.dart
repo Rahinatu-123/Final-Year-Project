@@ -6,8 +6,14 @@ import 'style_detail_page.dart';
 class StyleGalleryPage extends StatefulWidget {
   final String? title;
   final List<String> categories;
+  final String? personImagePath;
 
-  const StyleGalleryPage({super.key, this.title, required this.categories});
+  const StyleGalleryPage({
+    super.key,
+    this.title,
+    required this.categories,
+    this.personImagePath,
+  });
 
   @override
   State<StyleGalleryPage> createState() => _StyleGalleryPageState();
@@ -223,7 +229,8 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
         builder: (context) => StyleDetailPage(
           style: style,
           category: style['category'],
-          styleId: style['id'], // Pass the style ID if available
+          styleId: style['id'],
+          personImagePath: widget.personImagePath,
         ),
       ),
     );

@@ -9,6 +9,7 @@ import 'sew_with_me.dart';
 import 'buy_fabric_with_me.dart';
 import 'explore.dart';
 import 'overlay.dart'; // AICameraOverlay for measurement capture
+import 'indicator.dart'; // MeasurementIndicationScreen for measurement instructions
 import 'package:fashionhub/screens/mutual_connections.dart';
 import 'shop_order_detail.dart';
 
@@ -241,7 +242,9 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           AppColors.coral,
           () => Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AICameraOverlay()),
+            MaterialPageRoute(
+              builder: (context) => const MeasurementIndicationScreen(),
+            ),
           ),
         ),
         _buildActionCard(
