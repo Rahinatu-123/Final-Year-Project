@@ -105,19 +105,29 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       // Price Section
                       Row(
                         children: [
-                          Text(
-                            'GHS ${widget.product.price.toStringAsFixed(2)}',
-                            style: AppTextStyles.h3.copyWith(
-                              color: AppColors.primary,
-                            ),
-                          ),
-                          if (widget.product.discountedPrice != null) ...[
-                            const SizedBox(width: 8),
+                          if (widget.product.discountedPrice != null &&
+                              widget.product.discountedPrice! > 0 &&
+                              widget.product.discountedPrice! <
+                                  widget.product.price) ...[
                             Text(
                               'GHS ${widget.product.discountedPrice!.toStringAsFixed(2)}',
+                              style: AppTextStyles.h3.copyWith(
+                                color: AppColors.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'GHS ${widget.product.price.toStringAsFixed(2)}',
                               style: AppTextStyles.bodyMedium.copyWith(
                                 decoration: TextDecoration.lineThrough,
                                 color: AppColors.textTertiary,
+                              ),
+                            ),
+                          ] else ...[
+                            Text(
+                              'GHS ${widget.product.price.toStringAsFixed(2)}',
+                              style: AppTextStyles.h3.copyWith(
+                                color: AppColors.primary,
                               ),
                             ),
                           ],
@@ -149,11 +159,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
                       // Specifications for clothes
                       if (widget.product.type == ProductType.clothes) ...[
-                        if (widget.product.color != null &&
-                            widget.product.color!.isNotEmpty) ...[
-                          _buildSpecItem('Color', widget.product.color!),
-                          const SizedBox(height: 12),
-                        ],
                         if (widget.product.size != null &&
                             widget.product.size!.isNotEmpty) ...[
                           _buildSpecItem('Size', widget.product.size!),
@@ -161,6 +166,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ],
                         if (widget.product.isCustomizable == true)
                           _buildSpecItem('Customizable', 'Yes'),
+                      ],
+
+                      // Estimated Delivery Days
+                      if (widget.product.estimatedDays != null &&
+                          widget.product.estimatedDays! > 0) ...[
+                        const SizedBox(height: 12),
+                        _buildSpecItem(
+                          'Estimated Days to Delivery',
+                          '${widget.product.estimatedDays} days',
+                        ),
                       ],
 
                       const SizedBox(height: 20),

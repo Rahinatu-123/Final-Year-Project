@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/order.dart';
+import '../models/shop_order.dart';
+import '../models/custom_order.dart';
 import '../services/order_service.dart';
+import '../services/shop_order_service.dart';
+import '../services/custom_order_service.dart';
 import '../theme/app_theme.dart';
 import 'order_list.dart';
 import 'order_details.dart';
@@ -19,7 +24,9 @@ class TailorDashboardScreen extends StatefulWidget {
 
 class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
   late OrderService orderService;
-  String? tailorName;
+  late ShopOrderService shopOrderService;
+  late CustomOrderService customOrderService;
+  String? tallorName;
 
   @override
   void initState() {

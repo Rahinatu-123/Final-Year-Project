@@ -18,6 +18,7 @@ class ProductPreviewScreen extends StatefulWidget {
   final String? category;
   final bool isSoldOut;
   final bool isCustomizable;
+  final int? estimatedDays;
   final List<String> imageUrls;
   final List<String> selectedImagePaths;
   final String sellerId;
@@ -35,6 +36,7 @@ class ProductPreviewScreen extends StatefulWidget {
     this.category,
     required this.isSoldOut,
     required this.isCustomizable,
+    this.estimatedDays,
     required this.imageUrls,
     required this.selectedImagePaths,
     required this.sellerId,
@@ -109,19 +111,28 @@ class _ProductPreviewScreenState extends State<ProductPreviewScreen> {
                   // Price Section
                   Row(
                     children: [
-                      Text(
-                        'GHS ${widget.price.toStringAsFixed(2)}',
-                        style: AppTextStyles.h3.copyWith(
-                          color: AppColors.primary,
-                        ),
-                      ),
-                      if (widget.discountedPrice != null) ...[
-                        const SizedBox(width: 8),
+                      if (widget.discountedPrice != null &&
+                          widget.discountedPrice! > 0 &&
+                          widget.discountedPrice! < widget.price) ...[
                         Text(
                           'GHS ${widget.discountedPrice!.toStringAsFixed(2)}',
+                          style: AppTextStyles.h3.copyWith(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'GHS ${widget.price.toStringAsFixed(2)}',
                           style: AppTextStyles.bodyMedium.copyWith(
                             decoration: TextDecoration.lineThrough,
                             color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ] else ...[
+                        Text(
+                          'GHS ${widget.price.toStringAsFixed(2)}',
+                          style: AppTextStyles.h3.copyWith(
+                            color: AppColors.primary,
                           ),
                         ),
                       ],

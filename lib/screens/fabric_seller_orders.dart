@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/fabric_order.dart';
+import '../models/shop_order.dart';
 import '../services/fabric_seller_service.dart';
+import '../services/shop_order_service.dart';
+import 'shop_order_detail.dart';
 
 class FabricSellerOrders extends StatefulWidget {
   final String sellerId;
@@ -12,27 +16,77 @@ class FabricSellerOrders extends StatefulWidget {
   State<FabricSellerOrders> createState() => _FabricSellerOrdersState();
 }
 
-class _FabricSellerOrdersState extends State<FabricSellerOrders> {
+class _FabricSellerOrdersState extends State<FabricSellerOrders>
+    with WidgetsBindingObserver {
   final FabricSellerService _fabricService = FabricSellerService();
+  final ShopOrderService _shopOrderService = ShopOrderService();
+
   FabricOrderStatus? _selectedStatus;
+  String _orderType = 'all'; // 'all', 'fabric', 'shop'
   bool _isLoading = true;
-  late List<FabricOrder> _allOrders;
+
+  late List<FabricOrder> _fabricOrders;
+  late List<ShopOrder> _shopOrders;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadOrders();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh orders when app comes to foreground
+      _loadOrders();
+    }
   }
 
   Future<void> _loadOrders() async {
     setState(() => _isLoading = true);
     try {
-      final orders = await _fabricService.getSellerOrders(widget.sellerId);
+      print('Loading orders for sellerId: ${widget.sellerId}');
+
+      final fabricOrders = await _fabricService.getSellerOrders(
+        widget.sellerId,
+      );
+      print('Loaded ${fabricOrders.length} fabric orders');
+
+      // Get all shop orders for debugging
+      final allShopOrdersSnapshot = await FirebaseFirestore.instance
+          .collection('shop_orders')
+          .limit(100)
+          .get();
+      print(
+        'Total shop orders in collection: ${allShopOrdersSnapshot.docs.length}',
+      );
+
+      // Get shop orders using getTailorOrdersStream and convert to Future
+      final shopOrdersStream = _shopOrderService.getTailorOrdersStream(
+        widget.sellerId,
+      );
+      final shopOrders = await shopOrdersStream.first;
+      print('Loaded ${shopOrders.length} shop orders for this seller');
+
+      // Log the first shop order if exists for debugging
+      if (shopOrders.isNotEmpty) {
+        print('First order tailorId: ${shopOrders.first.tailorId}');
+      }
+
       setState(() {
-        _allOrders = orders;
+        _fabricOrders = fabricOrders;
+        _shopOrders = shopOrders;
         _isLoading = false;
       });
     } catch (e) {
+      print('Error loading orders: $e');
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -42,9 +96,19 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredOrders = _selectedStatus == null
-        ? _allOrders
-        : _allOrders.where((order) => order.status == _selectedStatus).toList();
+    // Filter fabric orders by status
+    final filteredFabricOrders = _selectedStatus == null
+        ? _fabricOrders
+        : _fabricOrders
+              .where((order) => order.status == _selectedStatus)
+              .toList();
+
+    // Combine display lists based on order type filter
+    final displayCount = _orderType == 'all'
+        ? filteredFabricOrders.length + _shopOrders.length
+        : (_orderType == 'fabric'
+              ? filteredFabricOrders.length
+              : _shopOrders.length);
 
     return Scaffold(
       appBar: AppBar(
@@ -54,54 +118,114 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // Status Filter
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        FilterChip(
-                          label: const Text('All Orders'),
-                          selected: _selectedStatus == null,
-                          onSelected: (selected) {
-                            setState(() => _selectedStatus = null);
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        ...FabricOrderStatus.values.map((status) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: FilterChip(
-                              label: Text(_getStatusLabel(status)),
-                              selected: _selectedStatus == status,
-                              onSelected: (selected) {
-                                setState(() {
-                                  _selectedStatus = selected ? status : null;
-                                });
-                              },
+          : RefreshIndicator(
+              onRefresh: _loadOrders,
+              child: Column(
+                children: [
+                  // Order Type Filter
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          FilterChip(
+                            label: const Text('All Orders'),
+                            selected: _orderType == 'all',
+                            onSelected: (selected) {
+                              setState(() => _orderType = 'all');
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            label: Text(
+                              'Fabric Orders (${_fabricOrders.length})',
                             ),
-                          );
-                        }).toList(),
-                      ],
+                            selected: _orderType == 'fabric',
+                            onSelected: (selected) {
+                              setState(() => _orderType = 'fabric');
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          FilterChip(
+                            label: Text('Shop Orders (${_shopOrders.length})'),
+                            selected: _orderType == 'shop',
+                            onSelected: (selected) {
+                              setState(() => _orderType = 'shop');
+                            },
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                // Orders List
-                Expanded(
-                  child: filteredOrders.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filteredOrders.length,
-                          itemBuilder: (context, index) {
-                            return _buildOrderCard(filteredOrders[index]);
-                          },
+                  // Status Filter (only for fabric orders)
+                  if (_orderType == 'all' || _orderType == 'fabric')
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            FilterChip(
+                              label: const Text('All Statuses'),
+                              selected: _selectedStatus == null,
+                              onSelected: (selected) {
+                                setState(() => _selectedStatus = null);
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            ...FabricOrderStatus.values.map((status) {
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8.0),
+                                child: FilterChip(
+                                  label: Text(_getStatusLabel(status)),
+                                  selected: _selectedStatus == status,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      _selectedStatus = selected
+                                          ? status
+                                          : null;
+                                    });
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ],
                         ),
-                ),
-              ],
+                      ),
+                    ),
+                  // Orders List
+                  Expanded(
+                    child: displayCount == 0
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: displayCount,
+                            itemBuilder: (context, index) {
+                              if (_orderType == 'fabric') {
+                                return _buildFabricOrderCard(
+                                  filteredFabricOrders[index],
+                                );
+                              } else if (_orderType == 'shop') {
+                                return _buildShopOrderCard(_shopOrders[index]);
+                              } else {
+                                // All orders - fabric orders first, then shop orders
+                                if (index < filteredFabricOrders.length) {
+                                  return _buildFabricOrderCard(
+                                    filteredFabricOrders[index],
+                                  );
+                                } else {
+                                  return _buildShopOrderCard(
+                                    _shopOrders[index -
+                                        filteredFabricOrders.length],
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
     );
   }
@@ -119,7 +243,7 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders> {
     );
   }
 
-  Widget _buildOrderCard(FabricOrder order) {
+  Widget _buildFabricOrderCard(FabricOrder order) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
@@ -280,6 +404,130 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildShopOrderCard(ShopOrder order) {
+    Color statusColor;
+    String statusText;
+
+    switch (order.status) {
+      case ShopOrderStatus.pending:
+        statusColor = Colors.orange;
+        statusText = 'Pending';
+        break;
+      case ShopOrderStatus.confirmed:
+        statusColor = Colors.blue;
+        statusText = 'Confirmed';
+        break;
+      case ShopOrderStatus.inProgress:
+        statusColor = Colors.purple;
+        statusText = 'In Progress';
+        break;
+      case ShopOrderStatus.ready:
+        statusColor = Colors.green;
+        statusText = 'Ready';
+        break;
+      case ShopOrderStatus.completed:
+        statusColor = Colors.green;
+        statusText = 'Completed';
+        break;
+      case ShopOrderStatus.cancelled:
+        statusColor = Colors.red;
+        statusText = 'Cancelled';
+        break;
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                ShopOrderDetailScreen(orderId: order.id, isForTailor: true),
+          ),
+        );
+      },
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Row(
+          children: [
+            // Product Image
+            Container(
+              width: 80,
+              height: 80,
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: AppColors.surfaceVariant,
+                image: order.productImages.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(order.productImages.first),
+                        fit: BoxFit.cover,
+                      )
+                    : null,
+              ),
+              child: order.productImages.isEmpty
+                  ? const Icon(
+                      Icons.image_not_supported,
+                      color: AppColors.textTertiary,
+                    )
+                  : null,
+            ),
+            // Order Info
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      order.productName,
+                      style: AppTextStyles.bodyLarge.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Qty: ${order.quantity} | GHS ${order.getTotalPrice().toStringAsFixed(2)}',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        statusText,
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Arrow
+            const Padding(
+              padding: EdgeInsets.only(right: 12.0),
+              child: Icon(Icons.arrow_forward, color: AppColors.textTertiary),
+            ),
+          ],
+        ),
       ),
     );
   }

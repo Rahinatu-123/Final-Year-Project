@@ -23,6 +23,7 @@ class Product {
   final String? color; // Color of item
   final String? size; // Size (for clothes)
   final bool? isCustomizable; // Can be customized?
+  final int? estimatedDays; // Days to complete/deliver
   final List<String> tags; // Tags for search
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -43,6 +44,7 @@ class Product {
     this.color,
     this.size,
     this.isCustomizable,
+    this.estimatedDays,
     required this.tags,
     required this.createdAt,
     this.updatedAt,
@@ -65,6 +67,7 @@ class Product {
       'color': color,
       'size': size,
       'isCustomizable': isCustomizable,
+      'estimatedDays': estimatedDays,
       'tags': tags,
       'createdAt': createdAt,
       'updatedAt': updatedAt ?? FieldValue.serverTimestamp(),
@@ -96,6 +99,7 @@ class Product {
       color: data['color'],
       size: data['size'],
       isCustomizable: data['isCustomizable'],
+      estimatedDays: data['estimatedDays'],
       tags: List<String>.from(data['tags'] ?? []),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
@@ -119,6 +123,7 @@ class Product {
     String? color,
     String? size,
     bool? isCustomizable,
+    int? estimatedDays,
     List<String>? tags,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -139,6 +144,7 @@ class Product {
       color: color ?? this.color,
       size: size ?? this.size,
       isCustomizable: isCustomizable ?? this.isCustomizable,
+      estimatedDays: estimatedDays ?? this.estimatedDays,
       tags: tags ?? this.tags,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

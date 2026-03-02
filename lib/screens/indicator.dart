@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:math';
 import 'overlay.dart';
 
 class MeasurementIndicationScreen extends StatefulWidget {
@@ -15,11 +16,14 @@ class _MeasurementIndicationScreenState
   late PageController _pageController;
   Timer? _autoAdvanceTimer;
   int _currentPage = 0;
+  bool _isMale = false;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    // Randomly select between male and female body images
+    _isMale = Random().nextBool();
   }
 
   @override
@@ -46,25 +50,42 @@ class _MeasurementIndicationScreenState
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
-        child: PageView(
-          controller: _pageController,
-          onPageChanged: (page) {
-            setState(() {
-              _currentPage = page;
-              if (page == 1) {
-                _startAutoAdvance();
-              } else {
-                _autoAdvanceTimer?.cancel();
-              }
-            });
-          },
+        child: Stack(
           children: [
-            // Page 1: Instructions
-            _buildInstructionsPage(context),
-            // Page 2: Frontal View
-            _buildFrontalViewPage(context),
-            // Page 3: Lateral View
-            _buildLateralViewPage(context),
+            PageView(
+              controller: _pageController,
+              onPageChanged: (page) {
+                setState(() {
+                  _currentPage = page;
+                  if (page == 1) {
+                    _startAutoAdvance();
+                  } else {
+                    _autoAdvanceTimer?.cancel();
+                  }
+                });
+              },
+              children: [
+                // Page 1: Instructions
+                _buildInstructionsPage(context),
+                // Page 2: Frontal View
+                _buildFrontalViewPage(context),
+                // Page 3: Lateral View
+                _buildLateralViewPage(context),
+              ],
+            ),
+            // Back Button
+            Positioned(
+              top: 16,
+              left: 16,
+              child: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
           ],
         ),
       ),
@@ -167,12 +188,12 @@ class _MeasurementIndicationScreenState
           ),
           const SizedBox(height: 10),
           const Text(
-            "Stand facing the camera like this\n(Auto-advancing in 10 seconds...)",
+            "Stand facing the camera like this",
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey, fontSize: 14),
           ),
           const SizedBox(height: 30),
-          // Frontal body position visualization
+          // Frontal body position image
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -180,9 +201,11 @@ class _MeasurementIndicationScreenState
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade700),
               ),
-              child: CustomPaint(
-                painter: FrontalBodyPositionPainter(),
-                size: Size.infinite,
+              child: Image.asset(
+                _isMale
+                    ? 'assets/front.png'
+                    : 'assets/body_position_frontal.jpg',
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -218,7 +241,7 @@ class _MeasurementIndicationScreenState
             style: TextStyle(color: Colors.grey, fontSize: 14),
           ),
           const SizedBox(height: 30),
-          // Lateral body position visualization
+          // Lateral body position image
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -226,9 +249,11 @@ class _MeasurementIndicationScreenState
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade700),
               ),
-              child: CustomPaint(
-                painter: LateralBodyPositionPainter(),
-                size: Size.infinite,
+              child: Image.asset(
+                _isMale
+                    ? 'assets/side.png'
+                    : 'assets/body_position_lateral.png',
+                fit: BoxFit.contain,
               ),
             ),
           ),
@@ -314,145 +339,4 @@ class _MeasurementIndicationScreenState
       ),
     );
   }
-}
-
-// Frontal body position painter
-class FrontalBodyPositionPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final strokePaint = Paint()
-      ..color = const Color(0xFF8B6F47)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final fillPaint = Paint()
-      ..color = const Color(0xFFA0826D)
-      ..style = PaintingStyle.fill;
-
-    final centerX = size.width / 2;
-    final topY = size.height * 0.1;
-
-    // Head
-    canvas.drawCircle(Offset(centerX, topY + 40), 30, fillPaint);
-    canvas.drawCircle(Offset(centerX, topY + 40), 30, strokePaint);
-
-    // Neck
-    canvas.drawLine(
-      Offset(centerX, topY + 70),
-      Offset(centerX, topY + 90),
-      strokePaint,
-    );
-
-    // Torso (wider for realistic body)
-    final torsoPath = Path();
-    torsoPath.moveTo(centerX - 35, topY + 90);
-    torsoPath.lineTo(centerX - 40, topY + 160);
-    torsoPath.lineTo(centerX + 40, topY + 160);
-    torsoPath.lineTo(centerX + 35, topY + 90);
-    torsoPath.close();
-    canvas.drawPath(torsoPath, fillPaint);
-    canvas.drawPath(torsoPath, strokePaint);
-
-    // Left arm
-    canvas.drawLine(
-      Offset(centerX - 35, topY + 100),
-      Offset(centerX - 75, topY + 140),
-      strokePaint..strokeWidth = 8,
-    );
-
-    // Right arm
-    canvas.drawLine(
-      Offset(centerX + 35, topY + 100),
-      Offset(centerX + 75, topY + 140),
-      strokePaint..strokeWidth = 8,
-    );
-
-    // Left leg
-    canvas.drawLine(
-      Offset(centerX - 20, topY + 160),
-      Offset(centerX - 20, size.height * 0.85),
-      strokePaint..strokeWidth = 8,
-    );
-
-    // Right leg
-    canvas.drawLine(
-      Offset(centerX + 20, topY + 160),
-      Offset(centerX + 20, size.height * 0.85),
-      strokePaint..strokeWidth = 8,
-    );
-  }
-
-  @override
-  bool shouldRepaint(FrontalBodyPositionPainter oldDelegate) => false;
-}
-
-// Lateral body position painter
-class LateralBodyPositionPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final strokePaint = Paint()
-      ..color = const Color(0xFF8B6F47)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final fillPaint = Paint()
-      ..color = const Color(0xFFA0826D)
-      ..style = PaintingStyle.fill;
-
-    final startX = size.width * 0.3;
-    final topY = size.height * 0.1;
-
-    // Head (profile)
-    canvas.drawCircle(Offset(startX + 40, topY + 40), 30, fillPaint);
-    canvas.drawCircle(Offset(startX + 40, topY + 40), 30, strokePaint);
-
-    // Neck
-    canvas.drawLine(
-      Offset(startX + 40, topY + 70),
-      Offset(startX + 40, topY + 90),
-      strokePaint,
-    );
-
-    // Torso (angled for lateral view)
-    final torsoPath = Path();
-    torsoPath.moveTo(startX + 40, topY + 90);
-    torsoPath.lineTo(startX + 35, topY + 100);
-    torsoPath.lineTo(startX + 30, topY + 160);
-    torsoPath.lineTo(startX + 50, topY + 160);
-    torsoPath.lineTo(startX + 45, topY + 100);
-    torsoPath.close();
-    canvas.drawPath(torsoPath, fillPaint);
-    canvas.drawPath(torsoPath, strokePaint);
-
-    // Front arm (raised)
-    canvas.drawLine(
-      Offset(startX + 40, topY + 105),
-      Offset(startX + 85, topY + 80),
-      strokePaint..strokeWidth = 8,
-    );
-
-    // Back arm (relaxed)
-    canvas.drawLine(
-      Offset(startX + 40, topY + 110),
-      Offset(startX - 5, topY + 125),
-      strokePaint..strokeWidth = 8,
-    );
-
-    // Front leg
-    canvas.drawLine(
-      Offset(startX + 40, topY + 160),
-      Offset(startX + 40, size.height * 0.85),
-      strokePaint..strokeWidth = 8,
-    );
-
-    // Back leg
-    canvas.drawLine(
-      Offset(startX + 40, topY + 160),
-      Offset(startX + 10, size.height * 0.85),
-      strokePaint..strokeWidth = 8,
-    );
-  }
-
-  @override
-  bool shouldRepaint(LateralBodyPositionPainter oldDelegate) => false;
 }

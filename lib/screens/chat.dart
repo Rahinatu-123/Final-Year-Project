@@ -1,7 +1,12 @@
+import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_sound/flutter_sound.dart' hide PlayerState;
+import 'package:audioplayers/audioplayers.dart';
 import '../theme/app_theme.dart';
+import '../services/audio_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
@@ -21,11 +26,74 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final userId = FirebaseAuth.instance.currentUser?.uid;
   final ScrollController _scrollController = ScrollController();
+  final AudioService _audioService = AudioService();
+
+  late FlutterSoundRecorder _audioRecorder;
+  bool _isRecording = false;
+  bool _hasAllowedAudio = false;
+  String? _recordingPath;
+
+  // Audio playback
+  late AudioPlayer _audioPlayer;
+  String? _currentlyPlayingUrl;
+  bool _isPlaying = false;
 
   @override
   void initState() {
     super.initState();
     _messageController.addListener(_onTextChanged);
+    _checkAudioPermission();
+    _initializeAudioRecorder();
+    _initializeAudioPlayer();
+  }
+
+  void _initializeAudioRecorder() async {
+    try {
+      print('Initializing recorder...');
+      _audioRecorder = FlutterSoundRecorder();
+
+      // Add a small delay to ensure system is ready
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      await _audioRecorder.openRecorder();
+
+      print('✓ Audio recorder initialized successfully');
+      print('✓ Recorder is ready to use');
+    } catch (e) {
+      print('✗ Error initializing recorder: $e');
+      print('✗ Stack trace: ${StackTrace.current}');
+    }
+  }
+
+  void _initializeAudioPlayer() {
+    _audioPlayer = AudioPlayer();
+    _audioPlayer.onPlayerStateChanged.listen((playerState) {
+      setState(() {
+        _isPlaying = playerState == PlayerState.playing;
+      });
+    });
+    _audioPlayer.onPlayerComplete.listen((_) {
+      setState(() {
+        _isPlaying = false;
+        _currentlyPlayingUrl = null;
+      });
+    });
+  }
+
+  Future<void> _checkAudioPermission() async {
+    final hasPermission = await _audioService.hasMicrophonePermission();
+    setState(() {
+      _hasAllowedAudio = hasPermission;
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    _audioRecorder.closeRecorder();
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   void _onTextChanged() {
@@ -180,16 +248,55 @@ class _ChatScreenState extends State<ChatScreen> {
             var msg = snapshot.data!.docs[index];
             bool isMe = msg['senderId'] == userId;
 
+            // Safely check for style share message
+            bool isStyleShare = false;
+            try {
+              isStyleShare =
+                  msg['type'] == 'style_share' && msg['styleData'] != null;
+            } catch (e) {
+              isStyleShare = false;
+            }
+
             // Group messages by time
             bool showTimestamp = false;
             if (index == snapshot.data!.docs.length - 1) {
               showTimestamp = true;
             }
 
+            Widget buildMessage() {
+              try {
+                if (isStyleShare) {
+                  final styleData = msg['styleData'] as Map<String, dynamic>?;
+                  if (styleData != null) {
+                    return _buildStyleShareBubble(styleData, isMe);
+                  }
+                }
+
+                // Check if message is audio
+                final isAudio =
+                    msg['type'] == 'audio' && msg['audioUrl'] != null;
+                if (isAudio) {
+                  return _buildAudioBubble(
+                    msg['audioUrl'],
+                    msg['duration'] ?? 0,
+                    isMe,
+                  );
+                }
+
+                return _buildMessageBubble(
+                  msg['text'] ?? 'Sent a message',
+                  isMe,
+                );
+              } catch (e) {
+                debugPrint('Message build error: $e');
+                return _buildMessageBubble('Error loading message', isMe);
+              }
+            }
+
             return Column(
               children: [
                 if (showTimestamp) _buildTimestamp("Today"),
-                _buildMessageBubble(msg['text'], isMe),
+                buildMessage(),
               ],
             );
           },
@@ -227,6 +334,77 @@ class _ChatScreenState extends State<ChatScreen> {
             textAlign: TextAlign.center,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStyleShareBubble(Map<String, dynamic> styleData, bool isMe) {
+    final imageUrl = styleData['imageUrl'] ?? '';
+    final styleName = styleData['name'] ?? 'Style';
+    final sellerName = styleData['sellerName'] ?? '';
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppShadows.soft,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Style Image
+            if (imageUrl.isNotEmpty)
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+                child: Image.network(
+                  imageUrl,
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    height: 200,
+                    color: AppColors.surfaceVariant,
+                    child: const Icon(Icons.image_not_supported),
+                  ),
+                ),
+              ),
+            // Style Info
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    styleName,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (sellerName.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'By $sellerName',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -373,13 +551,23 @@ class _ChatScreenState extends State<ChatScreen> {
             GestureDetector(
               onTap: _hasText
                   ? _sendMessage
-                  : () {
-                      // TODO: Implement audio recording
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Audio recording coming soon!'),
-                        ),
-                      );
+                  : () async {
+                      final hasPermission = await _audioService
+                          .requestMicrophonePermission();
+                      if (hasPermission) {
+                        setState(() => _hasAllowedAudio = true);
+                        _showAudioRecordingUI();
+                      } else {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Microphone permission required for audio recording',
+                              ),
+                            ),
+                          );
+                        }
+                      }
                     },
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -402,5 +590,509 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
     );
+  }
+
+  /// Build audio message bubble with play button
+  Widget _buildAudioBubble(String audioUrl, int duration, bool isMe) {
+    String durationText = _formatDuration(duration);
+    bool isPlayingThisAudio = _currentlyPlayingUrl == audioUrl && _isPlaying;
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isMe ? AppColors.warmGradient : null,
+          color: isMe ? null : AppColors.surface,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(isMe ? 20 : 4),
+            bottomRight: Radius.circular(isMe ? 4 : 20),
+          ),
+          boxShadow: isMe
+              ? AppShadows.colored(AppColors.coral)
+              : AppShadows.soft,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GestureDetector(
+              onTap: () async {
+                await _playAudio(audioUrl);
+              },
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isMe
+                      ? Colors.white.withOpacity(0.3)
+                      : AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isPlayingThisAudio ? Icons.pause : Icons.play_arrow,
+                  color: isMe ? Colors.white : AppColors.primary,
+                  size: 20,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Voice message',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: isMe ? Colors.white : AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  durationText,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: isMe ? Colors.white70 : AppColors.textTertiary,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Play audio from URL
+  Future<void> _playAudio(String audioUrl) async {
+    try {
+      if (_currentlyPlayingUrl == audioUrl && _isPlaying) {
+        // Pause if this audio is already playing
+        await _audioPlayer.pause();
+      } else if (_currentlyPlayingUrl == audioUrl) {
+        // Resume if paused
+        await _audioPlayer.resume();
+      } else {
+        // Stop current audio and play new one
+        if (_isPlaying) {
+          await _audioPlayer.stop();
+        }
+        setState(() {
+          _currentlyPlayingUrl = audioUrl;
+        });
+        await _audioPlayer.play(UrlSource(audioUrl));
+      }
+    } catch (e) {
+      print('Error playing audio: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error playing audio: $e')));
+      }
+    }
+  }
+
+  /// Format duration in seconds to MM:SS format
+  String _formatDuration(int seconds) {
+    if (seconds == 0) return '0:00';
+    final minutes = seconds ~/ 60;
+    final secs = seconds % 60;
+    return '$minutes:${secs.toString().padLeft(2, '0')}';
+  }
+
+  /// Show WhatsApp-style audio recording UI
+  void _showAudioRecordingUI() {
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            bool isRecording = false;
+            int recordingSeconds = 0;
+            Timer? recordingTimer;
+            bool hasInitialized = false;
+
+            Future<void> startRecording() async {
+              if (hasInitialized) return;
+              hasInitialized = true;
+
+              try {
+                print('========== AUTO-START RECORDING ==========');
+                print('Auto-starting recording...');
+
+                // Wait a bit for recorder to be ready
+                await Future.delayed(const Duration(milliseconds: 500));
+
+                // Request permission first
+                print('Requesting microphone permission...');
+                final hasPermission = await _audioService
+                    .requestMicrophonePermission();
+                print('Permission granted: $hasPermission');
+                if (!hasPermission) {
+                  throw Exception('Microphone permission denied');
+                }
+
+                // Check if recorder is initialized
+                print('Checking if recorder is initialized...');
+                if (_audioRecorder == null) {
+                  throw Exception('Recorder not initialized');
+                }
+
+                print('Checking if recorder is ready...');
+
+                final recordingPath = await _audioService
+                    .generateAudioFilePath();
+                print('Recording path: $recordingPath');
+
+                _recordingPath = recordingPath;
+
+                // Create the file first
+                print('Creating audio file...');
+                final file = File(recordingPath);
+                await file.create(recursive: true);
+                print('File created: $recordingPath');
+
+                print('Starting recorder with path: $recordingPath');
+                await _audioRecorder.startRecorder(toFile: recordingPath);
+
+                print('✓ Recording auto-started: $recordingPath');
+                print('========== RECORDING STARTED ==========');
+
+                setModalState(() {
+                  isRecording = true;
+                });
+
+                // Start timer
+                recordingTimer = Timer.periodic(const Duration(seconds: 1), (
+                  timer,
+                ) {
+                  setModalState(() {
+                    recordingSeconds++;
+                  });
+                });
+              } catch (e) {
+                print('✗ Auto-start error: $e');
+                print('✗ Stack trace: ${StackTrace.current}');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Recording error: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
+              }
+            }
+
+            // Auto-start recording when modal opens
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              startRecording();
+            });
+
+            return Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+              ),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                top: 20,
+                left: 20,
+                right: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Handle bar
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.textTertiary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Mic icon with animation
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: isRecording
+                          ? Colors.red.withOpacity(0.1)
+                          : AppColors.primary.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.mic,
+                      size: 48,
+                      color: isRecording ? Colors.red : AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Recording time
+                  Text(
+                    isRecording
+                        ? '${recordingSeconds ~/ 60}:${(recordingSeconds % 60).toString().padLeft(2, '0')}'
+                        : 'Starting...',
+                    style: AppTextStyles.h3.copyWith(
+                      color: isRecording ? Colors.red : AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    isRecording
+                        ? 'Tap send when done'
+                        : 'Initializing recorder...',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Action buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      // Cancel button
+                      GestureDetector(
+                        onTap: () async {
+                          recordingTimer?.cancel();
+                          if (isRecording) {
+                            await _audioRecorder.stopRecorder();
+                          }
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceVariant,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.close,
+                            color: AppColors.textSecondary,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+
+                      // Record/Send button
+                      GestureDetector(
+                        onTap: () async {
+                          if (!isRecording) {
+                            // Try to manually start recording
+                            try {
+                              print(
+                                '========== MANUAL START RECORDING ==========',
+                              );
+                              print('Manually starting recording...');
+
+                              final hasPermission = await _audioService
+                                  .requestMicrophonePermission();
+                              if (!hasPermission) {
+                                throw Exception('Microphone permission denied');
+                              }
+
+                              if (_audioRecorder == null) {
+                                throw Exception('Recorder not initialized');
+                              }
+
+                              final recordingPath = await _audioService
+                                  .generateAudioFilePath();
+                              _recordingPath = recordingPath;
+
+                              final file = File(recordingPath);
+                              await file.create(recursive: true);
+
+                              print(
+                                'Starting recorder with path: $recordingPath',
+                              );
+                              await _audioRecorder.startRecorder(
+                                toFile: recordingPath,
+                              );
+
+                              print(
+                                '✓ Manual recording started: $recordingPath',
+                              );
+                              print('========== RECORDING STARTED ==========');
+
+                              setModalState(() {
+                                isRecording = true;
+                              });
+
+                              recordingTimer = Timer.periodic(
+                                const Duration(seconds: 1),
+                                (timer) {
+                                  setModalState(() {
+                                    recordingSeconds++;
+                                  });
+                                },
+                              );
+                            } catch (e) {
+                              print('✗ Manual start error: $e');
+                              print('✗ Stack trace: ${StackTrace.current}');
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error: $e'),
+                                    backgroundColor: Colors.red,
+                                    duration: const Duration(seconds: 5),
+                                  ),
+                                );
+                              }
+                            }
+                          } else {
+                            // Stop and send recording
+                            recordingTimer?.cancel();
+                            try {
+                              print('Stopping recording...');
+                              final path = await _audioRecorder.stopRecorder();
+                              print('✓ Recording stopped. Path: $path');
+
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                              }
+
+                              if (path != null && path.isNotEmpty) {
+                                print('Sending audio: $path');
+                                await _uploadAndSendAudio(
+                                  path,
+                                  recordingSeconds,
+                                );
+                              } else {
+                                print('✗ No recording path returned');
+                              }
+                            } catch (e) {
+                              print('✗ Error stopping recording: $e');
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Error sending: $e')),
+                                );
+                              }
+                            }
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: isRecording
+                                ? AppColors.warmGradient
+                                : null,
+                            color: !isRecording
+                                ? AppColors.surfaceVariant
+                                : null,
+                            shape: BoxShape.circle,
+                            boxShadow: isRecording
+                                ? AppShadows.colored(AppColors.coral)
+                                : null,
+                          ),
+                          child: Icon(
+                            isRecording ? Icons.send : Icons.mic,
+                            color: isRecording
+                                ? Colors.white
+                                : AppColors.textTertiary,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Upload audio file and send message
+  Future<void> _uploadAndSendAudio(String filePath, int durationSeconds) async {
+    try {
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Uploading audio...')));
+      }
+
+      // Upload to Firebase Storage
+      final downloadUrl = await _audioService.uploadAudio(
+        File(filePath),
+        widget.chatId,
+        userId ?? 'unknown',
+      );
+
+      if (downloadUrl == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload audio')),
+          );
+        }
+        return;
+      }
+
+      // Send audio message
+      await _sendAudioMessage(downloadUrl, durationSeconds);
+
+      // Delete local file
+      await _audioService.deleteLocalAudio(filePath);
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Audio message sent!')));
+      }
+    } catch (e) {
+      print('Error uploading audio: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  /// Send audio message to Firebase
+  Future<void> _sendAudioMessage(String audioUrl, int durationSeconds) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .add({
+            'type': 'audio',
+            'audioUrl': audioUrl,
+            'duration': durationSeconds,
+            'senderId': userId,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .set({
+            'lastMessage': 'Sent a voice message',
+            'updatedAt': FieldValue.serverTimestamp(),
+            'participants': FieldValue.arrayUnion([userId]),
+          }, SetOptions(merge: true));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error sending audio: $e')));
+      }
+    }
   }
 }

@@ -62,10 +62,38 @@ class _CreateShopOrderScreenState extends State<CreateShopOrderScreen> {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return;
 
+    // Validate price first
+    if (widget.product.price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Product price is invalid. Please contact the seller.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
-      final quantity = int.parse(_quantityController.text);
+      final quantityText = _quantityController.text.trim();
+      if (quantityText.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a quantity')),
+        );
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
+      final quantity = int.parse(quantityText);
+
+      if (quantity <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Quantity must be at least 1')),
+        );
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
       const uuid = Uuid();
 
       final order = ShopOrder(
@@ -295,10 +323,48 @@ class _CreateShopOrderScreenState extends State<CreateShopOrderScreen> {
                       Text('Unit Price:', style: AppTextStyles.bodyMedium),
                       Text(
                         'GHS ${(widget.product.discountedPrice ?? widget.product.price).toStringAsFixed(2)}',
-                        style: AppTextStyles.bodyMedium,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color:
+                              (widget.product.discountedPrice ??
+                                      widget.product.price) <=
+                                  0
+                              ? Colors.red
+                              : AppColors.textSecondary,
+                          fontWeight:
+                              (widget.product.discountedPrice ??
+                                      widget.product.price) <=
+                                  0
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
                       ),
                     ],
                   ),
+                  if ((widget.product.discountedPrice ??
+                          widget.product.price) <=
+                      0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        border: Border.all(color: Colors.red),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning, color: Colors.red, size: 16),
+                          SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Invalid price. Contact seller to set product price.',
+                              style: TextStyle(color: Colors.red, fontSize: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

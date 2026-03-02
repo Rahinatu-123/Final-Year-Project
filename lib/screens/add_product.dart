@@ -30,8 +30,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController priceController = TextEditingController();
   final TextEditingController discountPriceController = TextEditingController();
-  final TextEditingController colorController = TextEditingController();
   final TextEditingController sizeController = TextEditingController();
+  final TextEditingController estimatedDaysController = TextEditingController();
 
   ProductType selectedType = ProductType.clothes;
   String? selectedCategory;
@@ -78,8 +78,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     descriptionController.text = product.description;
     priceController.text = product.price.toString();
     discountPriceController.text = product.discountedPrice?.toString() ?? '';
-    colorController.text = product.color ?? '';
     sizeController.text = product.size ?? '';
+    estimatedDaysController.text = product.estimatedDays?.toString() ?? '';
     selectedType = product.type;
     selectedCategory = product.category;
     isSoldOut = product.isSoldOut;
@@ -93,8 +93,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     descriptionController.dispose();
     priceController.dispose();
     discountPriceController.dispose();
-    colorController.dispose();
     sizeController.dispose();
+    estimatedDaysController.dispose();
     super.dispose();
   }
 
@@ -241,44 +241,40 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ),
             const SizedBox(height: 20),
 
+            // Estimated Days to Delivery
+            _buildSection(
+              title: 'Estimated Days to Delivery',
+              child: TextField(
+                controller: estimatedDaysController,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  hintText: 'e.g., 5',
+                  suffixText: 'days',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  filled: true,
+                  fillColor: AppColors.surface,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+
             // Color and Size (only for clothes)
             if (selectedType == ProductType.clothes) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildSection(
-                      title: 'Color',
-                      child: TextField(
-                        controller: colorController,
-                        decoration: InputDecoration(
-                          hintText: 'e.g., Blue, Red',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          filled: true,
-                          fillColor: AppColors.surface,
-                        ),
-                      ),
+              _buildSection(
+                title: 'Size',
+                child: TextField(
+                  controller: sizeController,
+                  decoration: InputDecoration(
+                    hintText: 'e.g., M, L',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    filled: true,
+                    fillColor: AppColors.surface,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildSection(
-                      title: 'Size',
-                      child: TextField(
-                        controller: sizeController,
-                        decoration: InputDecoration(
-                          hintText: 'e.g., M, L',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          filled: true,
-                          fillColor: AppColors.surface,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: 20),
 
@@ -604,12 +600,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
           discountedPrice: discountPriceController.text.isEmpty
               ? null
               : double.tryParse(discountPriceController.text),
-          color: colorController.text.isEmpty ? null : colorController.text,
+          color: null,
           size: sizeController.text.isEmpty ? null : sizeController.text,
           type: selectedType,
           category: selectedCategory,
           isSoldOut: isSoldOut,
           isCustomizable: isCustomizable,
+          estimatedDays: estimatedDaysController.text.isEmpty
+              ? null
+              : int.tryParse(estimatedDaysController.text),
           imageUrls: imageUrls,
           selectedImagePaths: selectedImages.map((file) => file.path).toList(),
           sellerId: widget.sellerId,
@@ -672,11 +671,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
         ),
         isSoldOut: isSoldOut,
         category: selectedCategory,
-        color: colorController.text.isEmpty ? null : colorController.text,
+        color: null,
         size: sizeController.text.isEmpty ? null : sizeController.text,
         isCustomizable: selectedType == ProductType.clothes
             ? isCustomizable
             : null,
+        estimatedDays: estimatedDaysController.text.isEmpty
+            ? null
+            : int.tryParse(estimatedDaysController.text),
         tags: [], // Can be extended later
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -751,11 +753,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
         ),
         isSoldOut: isSoldOut,
         category: selectedCategory,
-        color: colorController.text.isEmpty ? null : colorController.text,
+        color: null,
         size: sizeController.text.isEmpty ? null : sizeController.text,
         isCustomizable: selectedType == ProductType.clothes
             ? isCustomizable
             : null,
+        estimatedDays: estimatedDaysController.text.isEmpty
+            ? null
+            : int.tryParse(estimatedDaysController.text),
         tags: [],
         createdAt: widget.productToEdit!.createdAt,
         updatedAt: DateTime.now(),

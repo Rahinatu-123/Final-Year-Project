@@ -622,9 +622,9 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                             ),
                           ),
                           Text(
-                            role == 'tailor'
+                            role.toLowerCase().contains('tailor')
                                 ? 'Tailor'
-                                : role == 'seamstress'
+                                : role.toLowerCase().contains('seamstress')
                                 ? 'Seamstress'
                                 : 'Fabric Seller',
                             style: AppTextStyles.labelSmall.copyWith(

@@ -12,30 +12,27 @@ class FabricSellerDashboard extends StatefulWidget {
   State<FabricSellerDashboard> createState() => _FabricSellerDashboardState();
 }
 
-class _FabricSellerDashboardState extends State<FabricSellerDashboard> {
+class _FabricSellerDashboardState extends State<FabricSellerDashboard>
+    with WidgetsBindingObserver {
   final FabricSellerService _fabricService = FabricSellerService();
-  bool _isLoading = true;
-  Map<String, dynamic> _salesOverview = {};
 
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    WidgetsBinding.instance.addObserver(this);
   }
 
-  Future<void> _loadDashboardData() async {
-    setState(() => _isLoading = true);
-    try {
-      final overview = await _fabricService.getSalesOverview(widget.sellerId);
-      setState(() {
-        _salesOverview = overview;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error loading dashboard: $e')));
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Stream will automatically update when app comes to foreground
+      // No need for manual refresh
     }
   }
 
@@ -47,55 +44,67 @@ class _FabricSellerDashboardState extends State<FabricSellerDashboard> {
         centerTitle: true,
         elevation: 0,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadDashboardData,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Sales Overview Cards
-                      Text(
-                        'Sales Overview',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildSalesOverviewCards(),
-                      const SizedBox(height: 24),
-                      // Quick Stats
-                      Text(
-                        'Quick Stats',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildQuickStats(),
-                      const SizedBox(height: 24),
-                      // Best Selling Fabrics
-                      Text(
-                        'Best Selling Fabrics',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildBestSellingFabrics(),
-                    ],
+      body: StreamBuilder<Map<String, dynamic>>(
+        stream: _fabricService.streamSalesOverview(widget.sellerId),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error loading dashboard: ${snapshot.error}'),
+            );
+          }
+
+          final salesOverview = snapshot.data ?? {};
+
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Sales Overview Cards
+                  Text(
+                    'Sales Overview',
+                    style: Theme.of(context).textTheme.headlineSmall,
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  _buildSalesOverviewCards(salesOverview),
+                  const SizedBox(height: 24),
+                  // Quick Stats
+                  Text(
+                    'Quick Stats',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildQuickStats(salesOverview),
+                  const SizedBox(height: 24),
+                  // Best Selling Fabrics
+                  Text(
+                    'Best Selling Fabrics',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildBestSellingFabrics(),
+                ],
               ),
             ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildSalesOverviewCards() {
+  Widget _buildSalesOverviewCards(Map<String, dynamic> salesOverview) {
     return Row(
       children: [
         Expanded(
           child: _buildStatCard(
             title: 'Total Sales',
-            value: '${_salesOverview['totalSales'] ?? 0}',
+            value: '${salesOverview['totalSales'] ?? 0}',
             icon: Icons.shopping_cart,
             color: Colors.blue,
           ),
@@ -105,7 +114,7 @@ class _FabricSellerDashboardState extends State<FabricSellerDashboard> {
           child: _buildStatCard(
             title: 'Revenue',
             value:
-                '\$${(_salesOverview['totalRevenue'] ?? 0).toStringAsFixed(2)}',
+                '\$${(salesOverview['totalRevenue'] ?? 0).toStringAsFixed(2)}',
             icon: Icons.trending_up,
             color: Colors.green,
           ),
@@ -150,7 +159,7 @@ class _FabricSellerDashboardState extends State<FabricSellerDashboard> {
     );
   }
 
-  Widget _buildQuickStats() {
+  Widget _buildQuickStats(Map<String, dynamic> salesOverview) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -160,12 +169,12 @@ class _FabricSellerDashboardState extends State<FabricSellerDashboard> {
           children: [
             _buildStatRow(
               'Average Order Value',
-              '\$${(_salesOverview['averageOrderValue'] ?? 0).toStringAsFixed(2)}',
+              '\$${(salesOverview['averageOrderValue'] ?? 0).toStringAsFixed(2)}',
             ),
             const Divider(height: 16),
             _buildStatRow(
               'Total Revenue',
-              '\$${(_salesOverview['totalRevenue'] ?? 0).toStringAsFixed(2)}',
+              '\$${(salesOverview['totalRevenue'] ?? 0).toStringAsFixed(2)}',
             ),
           ],
         ),

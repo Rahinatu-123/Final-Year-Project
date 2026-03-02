@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
+import 'custom_order.dart';
 
 /// Shop Order Status
 enum ShopOrderStatus {
@@ -68,10 +70,59 @@ class ShopOrder {
     this.progressImages = const [],
   });
 
-  /// Get total price
+  /// Get total price (unit price * quantity)
   double getTotalPrice() {
-    final unitPrice = discountedPrice ?? productPrice;
-    return unitPrice * quantity;
+    final basePrice = (discountedPrice != null && discountedPrice! > 0)
+        ? discountedPrice!
+        : productPrice;
+    final unitPrice = basePrice > 0 ? basePrice : 0;
+    final qty = quantity > 0 ? quantity : 1; // Fallback to 1 if quantity is 0
+    final total = unitPrice * qty.toDouble();
+    debugPrint(
+      'getTotalPrice: productPrice=$productPrice, discountedPrice=$discountedPrice, basePrice=$basePrice, unitPrice=$unitPrice, qty=$qty, total=$total',
+    );
+    return total;
+  }
+
+  /// Calculate days remaining until estimated delivery
+  int daysRemaining() {
+    if (estimatedDelivery == null) return 0;
+    final now = DateTime.now();
+    final difference = estimatedDelivery!.difference(now);
+    return difference.inDays > 0 ? difference.inDays : 0;
+  }
+
+  /// Get delivery urgency based on time elapsed
+  DeliveryUrgency getDeliveryUrgency() {
+    if (estimatedDelivery == null) return DeliveryUrgency.green;
+
+    final now = DateTime.now();
+    final totalDays = estimatedDelivery!.difference(createdAt).inDays;
+    final elapsedDays = now.difference(createdAt).inDays;
+
+    if (totalDays <= 0) return DeliveryUrgency.red;
+
+    final percentage = (elapsedDays / totalDays).clamp(0.0, 1.0);
+
+    if (percentage < 0.33) {
+      return DeliveryUrgency.green;
+    } else if (percentage < 0.66) {
+      return DeliveryUrgency.yellow;
+    } else {
+      return DeliveryUrgency.red;
+    }
+  }
+
+  /// Get urgency color as hex string
+  String getUrgencyColor() {
+    switch (getDeliveryUrgency()) {
+      case DeliveryUrgency.green:
+        return '#2D6A4F';
+      case DeliveryUrgency.yellow:
+        return '#E8A855';
+      case DeliveryUrgency.red:
+        return '#BA1A1A';
+    }
   }
 
   /// Map to Firestore
@@ -112,6 +163,25 @@ class ShopOrder {
 
   /// Create from Firestore
   factory ShopOrder.fromMap(Map<String, dynamic> map, String docId) {
+    // Safely parse quantity - ensure it's at least 1
+    int qty = 1;
+    try {
+      if (map['quantity'] != null) {
+        if (map['quantity'] is int) {
+          qty = map['quantity'] as int;
+        } else if (map['quantity'] is String) {
+          qty = int.parse(map['quantity']);
+        } else {
+          qty = (map['quantity'] as num).toInt();
+        }
+      }
+      // If quantity is 0 or negative, default to 1
+      if (qty <= 0) qty = 1;
+    } catch (e) {
+      debugPrint('Error parsing quantity: $e');
+      qty = 1;
+    }
+
     return ShopOrder(
       id: docId,
       customerId: map['customerId'] ?? '',
@@ -121,7 +191,7 @@ class ShopOrder {
       productImages: List<String>.from(map['productImages'] ?? []),
       productPrice: (map['productPrice'] ?? 0).toDouble(),
       discountedPrice: map['discountedPrice']?.toDouble(),
-      quantity: map['quantity'] ?? 1,
+      quantity: qty,
       color: map['color'],
       size: map['size'],
       customizations: map['customizations'],

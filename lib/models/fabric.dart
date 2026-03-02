@@ -20,6 +20,7 @@ class Fabric {
   final String id;
   final String sellerId;
   final String sellerName;
+  final String category; // 'fabric' - for filtering in explore
   final FabricType fabricType;
   final String color;
   final String pattern;
@@ -40,6 +41,7 @@ class Fabric {
     required this.id,
     required this.sellerId,
     required this.sellerName,
+    this.category = 'fabric',
     required this.fabricType,
     required this.color,
     required this.pattern,
@@ -80,6 +82,7 @@ class Fabric {
       'id': id,
       'sellerId': sellerId,
       'sellerName': sellerName,
+      'category': category,
       'fabricType': fabricType.toString().split('.').last,
       'color': color,
       'pattern': pattern,
@@ -104,6 +107,7 @@ class Fabric {
       id: documentId,
       sellerId: map['sellerId'] ?? '',
       sellerName: map['sellerName'] ?? '',
+      category: map['category'] ?? 'fabric',
       fabricType: _fabricTypeFromString(map['fabricType'] ?? 'cotton'),
       color: map['color'] ?? '',
       pattern: map['pattern'] ?? '',
@@ -135,6 +139,7 @@ class Fabric {
     String? id,
     String? sellerId,
     String? sellerName,
+    String? category,
     FabricType? fabricType,
     String? color,
     String? pattern,
@@ -155,6 +160,7 @@ class Fabric {
       id: id ?? this.id,
       sellerId: sellerId ?? this.sellerId,
       sellerName: sellerName ?? this.sellerName,
+      category: category ?? this.category,
       fabricType: fabricType ?? this.fabricType,
       color: color ?? this.color,
       pattern: pattern ?? this.pattern,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'dart:async';
 
 class AICameraOverlay extends StatefulWidget {
   const AICameraOverlay({super.key});
@@ -10,8 +11,11 @@ class AICameraOverlay extends StatefulWidget {
 
 class _AICameraOverlayState extends State<AICameraOverlay> {
   CameraController? _controller;
-  bool _isFrontal = true; // Toggle between Front and Side view
+  bool _isFrontal = true;
   List<CameraDescription>? _cameras;
+  bool _isAligned = false;
+  bool _isProcessing = false;
+  Timer? _alignmentTimer;
 
   @override
   void initState() {
@@ -27,8 +31,27 @@ class _AICameraOverlayState extends State<AICameraOverlay> {
     setState(() {});
   }
 
+  void _startAlignment() {
+    // Simulate alignment detection - user has 5 seconds to stay still
+    if (!_isAligned && !_isProcessing) {
+      setState(() => _isAligned = true);
+      _alignmentTimer?.cancel();
+      _alignmentTimer = Timer(const Duration(seconds: 5), () {
+        if (_isAligned && mounted && !_isProcessing) {
+          _takePicture();
+        }
+      });
+    }
+  }
+
+  void _cancelAlignment() {
+    _alignmentTimer?.cancel();
+    setState(() => _isAligned = false);
+  }
+
   @override
   void dispose() {
+    _alignmentTimer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
@@ -37,10 +60,15 @@ class _AICameraOverlayState extends State<AICameraOverlay> {
     if (_controller == null || !_controller!.value.isInitialized) return;
 
     try {
+      setState(() => _isProcessing = true);
       final image = await _controller!.takePicture();
-      // Handle the image (save locally or send to processing)
+
       if (_isFrontal) {
-        setState(() => _isFrontal = false); // Move to side view
+        setState(() {
+          _isFrontal = false;
+          _isAligned = false;
+          _isProcessing = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Frontal saved! Now stand sideways.")),
         );
@@ -50,6 +78,10 @@ class _AICameraOverlayState extends State<AICameraOverlay> {
       }
     } catch (e) {
       print(e);
+      setState(() {
+        _isAligned = false;
+        _isProcessing = false;
+      });
     }
   }
 
@@ -77,7 +109,17 @@ class _AICameraOverlayState extends State<AICameraOverlay> {
             ),
           ),
 
-          // 3. UI CONTROLS
+          // 3. ALIGNMENT GUIDES
+          if (_isAligned)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: CustomPaint(painter: AlignmentGuidePainter()),
+            ),
+
+          // 4. UI CONTROLS
           Positioned(
             bottom: 50,
             left: 0,
@@ -94,21 +136,87 @@ class _AICameraOverlayState extends State<AICameraOverlay> {
                     shadows: [Shadow(blurRadius: 10, color: Colors.black)],
                   ),
                 ),
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: _takePicture,
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt,
-                      size: 40,
-                      color: Colors.black,
-                    ),
+                const SizedBox(height: 10),
+                // Alignment indicator
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 16,
                   ),
+                  decoration: BoxDecoration(
+                    color: _isAligned ? Colors.green : Colors.orange,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isAligned ? Icons.check_circle : Icons.info_outline,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isAligned
+                            ? "Hold still... Capturing in 5s"
+                            : "Tap button and hold still",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // Camera button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_isAligned)
+                      GestureDetector(
+                        onTap: _cancelAlignment,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.stop,
+                            size: 32,
+                            color: Colors.white,
+                          ),
+                        ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: _startAlignment,
+                        onLongPress: _startAlignment,
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.white.withOpacity(0.5),
+                                blurRadius: 10,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _isProcessing
+                                ? Icons.hourglass_empty
+                                : Icons.camera_alt,
+                            size: 40,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -127,4 +235,51 @@ class _AICameraOverlayState extends State<AICameraOverlay> {
       ),
     );
   }
+}
+
+class AlignmentGuidePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.green.withOpacity(0.3)
+      ..strokeWidth = 3
+      ..style = PaintingStyle.stroke;
+
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+
+    // Draw rectangle guide
+    canvas.drawRect(
+      Rect.fromCenter(
+        center: Offset(centerX, centerY),
+        width: size.width * 0.6,
+        height: size.height * 0.8,
+      ),
+      paint,
+    );
+
+    // Draw corner circles
+    final cornerPaint = Paint()
+      ..color = Colors.green
+      ..style = PaintingStyle.fill;
+
+    const cornerRadius = 15.0;
+    final rect = Rect.fromCenter(
+      center: Offset(centerX, centerY),
+      width: size.width * 0.6,
+      height: size.height * 0.8,
+    );
+
+    // Top left
+    canvas.drawCircle(rect.topLeft, cornerRadius, cornerPaint);
+    // Top right
+    canvas.drawCircle(rect.topRight, cornerRadius, cornerPaint);
+    // Bottom left
+    canvas.drawCircle(rect.bottomLeft, cornerRadius, cornerPaint);
+    // Bottom right
+    canvas.drawCircle(rect.bottomRight, cornerRadius, cornerPaint);
+  }
+
+  @override
+  bool shouldRepaint(AlignmentGuidePainter oldDelegate) => false;
 }

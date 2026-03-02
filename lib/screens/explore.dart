@@ -461,9 +461,9 @@ class _ExplorePageState extends State<ExplorePage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            role == 'tailor'
+                            role.toLowerCase().contains('tailor')
                                 ? 'Tailor'
-                                : role == 'seamstress'
+                                : role.toLowerCase().contains('seamstress')
                                 ? 'Seamstress'
                                 : 'Fabric Seller',
                             maxLines: 1,
@@ -522,18 +522,34 @@ class _ExplorePageState extends State<ExplorePage> {
             fit: StackFit.expand,
             children: [
               FutureBuilder<QuerySnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('styles')
-                    .where(
-                      'category',
-                      whereIn: category['firestoreCategories'] as List<String>,
-                    )
-                    .limit(1)
-                    .get(),
+                future: category['name'] == 'Fabric'
+                    ? FirebaseFirestore.instance
+                          .collection('fabrics')
+                          .where(
+                            'category',
+                            whereIn:
+                                category['firestoreCategories'] as List<String>,
+                          )
+                          .limit(1)
+                          .get()
+                    : FirebaseFirestore.instance
+                          .collection('styles')
+                          .where(
+                            'category',
+                            whereIn:
+                                category['firestoreCategories'] as List<String>,
+                          )
+                          .limit(1)
+                          .get(),
                 builder: (context, snapshot) {
                   if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                    final imageUrl = snapshot.data!.docs.first['imageUrl'];
-                    return Image.network(imageUrl, fit: BoxFit.cover);
+                    final doc = snapshot.data!.docs.first;
+                    final imageUrl = category['name'] == 'Fabric'
+                        ? (doc['imageUrls'] as List?)?.first ?? ''
+                        : doc['imageUrl'] ?? '';
+                    if (imageUrl.isNotEmpty) {
+                      return Image.network(imageUrl, fit: BoxFit.cover);
+                    }
                   }
                   return Container(
                     color: AppColors.surfaceVariant,

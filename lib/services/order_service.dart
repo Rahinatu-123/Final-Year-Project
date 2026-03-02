@@ -185,6 +185,25 @@ class OrderService {
         });
   }
 
+  /// Stream of all orders for a tailor (both pending and completed) - real-time updates
+  Stream<List<order_model.Order>> getAllOrdersStream(String tailorId) {
+    return _firestore
+        .collection(ordersCollection)
+        .where('tailorId', isEqualTo: tailorId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map(
+                (doc) => order_model.Order.fromMap(
+                  doc.data() as Map<String, dynamic>,
+                  doc.id,
+                ),
+              )
+              .toList();
+        });
+  }
+
   /// Mark order as completed
   Future<void> completeOrder(String orderId) async {
     try {

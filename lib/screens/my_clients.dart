@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../models/tailor_client.dart';
@@ -9,6 +10,7 @@ import '../services/tailor_client_service.dart';
 import '../services/custom_order_service.dart';
 import '../theme/app_theme.dart';
 import 'orders.dart';
+import 'style_gallery.dart';
 
 class MyClientsScreen extends StatefulWidget {
   final String tailorId;
@@ -333,6 +335,7 @@ class _AddClientFormState extends State<AddClientForm> {
   // Images
   File? _profileImage;
   File? _styleImage;
+  String? _styleImageUrl; // URL from style gallery
 
   // Measurements
   final Map<String, TextEditingController> _measurementControllers = {
@@ -386,22 +389,54 @@ class _AddClientFormState extends State<AddClientForm> {
                 ),
               ),
               const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Gallery'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(isProfilePhoto, ImageSource.gallery);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Camera'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _pickImage(isProfilePhoto, ImageSource.camera);
-                },
-              ),
+              if (isProfilePhoto) ...[
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: const Text('Gallery'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(isProfilePhoto, ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text('Camera'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(isProfilePhoto, ImageSource.camera);
+                  },
+                ),
+              ] else ...[
+                // Style image options
+                ListTile(
+                  leading: const Icon(Icons.collections),
+                  title: const Text('Style Gallery'),
+                  subtitle: const Text('Browse from style collection'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _openStyleGallery();
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: const Text('Upload from Phone'),
+                  subtitle: const Text('Gallery'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(isProfilePhoto, ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text('Take Photo'),
+                  subtitle: const Text('Camera'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _pickImage(isProfilePhoto, ImageSource.camera);
+                  },
+                ),
+              ],
             ],
           ),
         ),
@@ -434,6 +469,27 @@ class _AddClientFormState extends State<AddClientForm> {
           context,
         ).showSnackBar(SnackBar(content: Text('Error picking image: $e')));
       }
+    }
+  }
+
+  Future<void> _openStyleGallery() async {
+    final selectedStyle = await showDialog<String>(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(0),
+        child: _StyleGallerySelector(
+          onStyleSelected: (styleImageUrl) {
+            Navigator.pop(context, styleImageUrl);
+          },
+        ),
+      ),
+    );
+
+    if (selectedStyle != null && selectedStyle.isNotEmpty) {
+      setState(() {
+        _styleImageUrl = selectedStyle;
+        _styleImage = null; // Clear local file selection
+      });
     }
   }
 
@@ -534,9 +590,13 @@ class _AddClientFormState extends State<AddClientForm> {
 
       final clientId = await clientService.createClient(client);
 
-      // Upload style image
+      // Determine style image URL
       String? styleImageUrl;
-      if (_styleImage != null) {
+
+      // Priority: Gallery selection first, then uploaded image
+      if (_styleImageUrl != null && _styleImageUrl!.isNotEmpty) {
+        styleImageUrl = _styleImageUrl;
+      } else if (_styleImage != null) {
         styleImageUrl = await _uploadImage(_styleImage!, 'style_photos');
       }
 
@@ -680,6 +740,61 @@ class _AddClientFormState extends State<AddClientForm> {
                                   child: GestureDetector(
                                     onTap: () =>
                                         setState(() => _styleImage = null),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.6),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      padding: const EdgeInsets.all(4),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : _styleImageUrl != null && _styleImageUrl!.isNotEmpty
+                          ? Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    _styleImageUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) => Center(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.error_outline,
+                                                size: 36,
+                                                color: AppColors.primary,
+                                              ),
+                                              const SizedBox(height: 8),
+                                              const Text(
+                                                'Error loading image',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: GestureDetector(
+                                    onTap: () =>
+                                        setState(() => _styleImageUrl = null),
                                     child: Container(
                                       decoration: BoxDecoration(
                                         color: Colors.black.withOpacity(0.6),
@@ -949,6 +1064,241 @@ class _AddClientFormState extends State<AddClientForm> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Style Gallery Selector widget for selecting styles
+class _StyleGallerySelector extends StatefulWidget {
+  final Function(String) onStyleSelected;
+
+  const _StyleGallerySelector({required this.onStyleSelected});
+
+  @override
+  State<_StyleGallerySelector> createState() => _StyleGallerySelectorState();
+}
+
+class _StyleGallerySelectorState extends State<_StyleGallerySelector> {
+  int _selectedCategoryIndex = 0;
+
+  List<String> get categories {
+    return [
+      'All',
+      'long dress',
+      'short dress',
+      'ladies top',
+      'top and down',
+      'bridal kenta',
+      'jumpsuit',
+      'lace',
+      'kaba and slit',
+      'men',
+      'couple',
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          "Select Style",
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          _buildCategoryChips(),
+          Expanded(child: _buildStyleGrid()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    return Container(
+      height: 48,
+      margin: const EdgeInsets.only(top: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length,
+        itemBuilder: (context, index) {
+          final isSelected = _selectedCategoryIndex == index;
+
+          return GestureDetector(
+            onTap: () => setState(() => _selectedCategoryIndex = index),
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary : AppColors.surface,
+                borderRadius: BorderRadius.circular(AppBorderRadius.xl),
+                boxShadow: AppShadows.soft,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                categories[index],
+                style: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildStyleGrid() {
+    final selectedCategory = categories[_selectedCategoryIndex];
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: selectedCategory == 'All'
+          ? FirebaseFirestore.instance.collection('styles').snapshots()
+          : FirebaseFirestore.instance
+                .collection('styles')
+                .where('category', isEqualTo: selectedCategory)
+                .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final styles = snapshot.data!.docs;
+
+        if (styles.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.image_not_supported_outlined,
+                  size: 48,
+                  color: AppColors.textSecondary.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No styles found',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(12),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: 0.8,
+          ),
+          itemCount: styles.length,
+          itemBuilder: (context, index) {
+            final style = styles[index].data() as Map<String, dynamic>;
+            final imageUrl = (style['imageUrl'] as String?) ?? '';
+
+            return GestureDetector(
+              onTap: imageUrl.isNotEmpty
+                  ? () {
+                      widget.onStyleSelected(imageUrl);
+                    }
+                  : null,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: imageUrl.isNotEmpty
+                          ? Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                    color: AppColors.primary.withOpacity(0.1),
+                                    child: Icon(
+                                      Icons.error_outline,
+                                      color: AppColors.primary,
+                                    ),
+                                  ),
+                            )
+                          : Container(
+                              color: AppColors.primary.withOpacity(0.1),
+                              child: Icon(
+                                Icons.image_not_supported_outlined,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                    ),
+                    // Category label
+                    if (style['category'] != null)
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.7),
+                              ],
+                            ),
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(12),
+                              bottomRight: Radius.circular(12),
+                            ),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: Text(
+                            style['category'] as String? ?? '',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

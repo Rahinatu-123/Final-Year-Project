@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product.dart';
-import '../models/shop_order.dart';
 import '../services/product_service.dart';
-import '../services/shop_order_service.dart';
 import '../theme/app_theme.dart';
 import 'add_product.dart';
 import 'product_detail_screen.dart';
-import 'shop_order_detail.dart';
 
 class MyShopScreen extends StatefulWidget {
   final String sellerId;
@@ -21,7 +18,6 @@ class MyShopScreen extends StatefulWidget {
 class _MyShopScreenState extends State<MyShopScreen>
     with TickerProviderStateMixin {
   late ProductService productService;
-  late ShopOrderService orderService;
   late TabController _tabController;
   bool isGridView = true;
 
@@ -29,8 +25,7 @@ class _MyShopScreenState extends State<MyShopScreen>
   void initState() {
     super.initState();
     productService = ProductService();
-    orderService = ShopOrderService();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 1, vsync: this);
   }
 
   @override
@@ -51,10 +46,7 @@ class _MyShopScreenState extends State<MyShopScreen>
         foregroundColor: AppColors.textPrimary,
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Products'),
-            Tab(text: 'Orders'),
-          ],
+          tabs: const [Tab(text: 'Products')],
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.textSecondary,
           indicatorColor: AppColors.primary,
@@ -79,8 +71,6 @@ class _MyShopScreenState extends State<MyShopScreen>
         children: [
           // Products Tab
           _buildProductsTab(),
-          // Orders Tab
-          _buildOrdersTab(),
         ],
       ),
       floatingActionButton: _tabController.index == 0
@@ -160,184 +150,6 @@ class _MyShopScreenState extends State<MyShopScreen>
           ],
         );
       },
-    );
-  }
-
-  Widget _buildOrdersTab() {
-    return StreamBuilder<List<ShopOrder>>(
-      stream: orderService.getTailorOrdersStream(widget.sellerId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
-
-        final orders = snapshot.data ?? [];
-
-        if (orders.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.shopping_bag_outlined,
-                  size: 64,
-                  color: AppColors.textTertiary,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No orders yet',
-                  style: AppTextStyles.h4.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Orders will appear here when customers place them',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textTertiary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            return _buildOrderCard(orders[index]);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildOrderCard(ShopOrder order) {
-    Color statusColor;
-    String statusText;
-
-    switch (order.status) {
-      case ShopOrderStatus.pending:
-        statusColor = Colors.orange;
-        statusText = 'Pending';
-        break;
-      case ShopOrderStatus.confirmed:
-        statusColor = Colors.blue;
-        statusText = 'Confirmed';
-        break;
-      case ShopOrderStatus.inProgress:
-        statusColor = Colors.purple;
-        statusText = 'In Progress';
-        break;
-      case ShopOrderStatus.ready:
-        statusColor = Colors.green;
-        statusText = 'Ready';
-        break;
-      case ShopOrderStatus.completed:
-        statusColor = Colors.green;
-        statusText = 'Completed';
-        break;
-      case ShopOrderStatus.cancelled:
-        statusColor = Colors.red;
-        statusText = 'Cancelled';
-        break;
-    }
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                ShopOrderDetailScreen(orderId: order.id, isForTailor: true),
-          ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: AppShadows.soft,
-        ),
-        child: Row(
-          children: [
-            // Product Image
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                color: AppColors.surfaceVariant,
-                image: order.productImages.isNotEmpty
-                    ? DecorationImage(
-                        image: NetworkImage(order.productImages.first),
-                        fit: BoxFit.cover,
-                      )
-                    : null,
-              ),
-              child: order.productImages.isEmpty
-                  ? const Icon(
-                      Icons.image_not_supported,
-                      color: AppColors.textTertiary,
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            // Order Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    order.productName,
-                    style: AppTextStyles.bodyLarge.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Qty: ${order.quantity} | GHS ${order.getTotalPrice().toStringAsFixed(2)}',
-                    style: AppTextStyles.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: statusColor.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      statusText,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: statusColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Arrow
-            const Icon(Icons.arrow_forward, color: AppColors.textTertiary),
-          ],
-        ),
-      ),
     );
   }
 

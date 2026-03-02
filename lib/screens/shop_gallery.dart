@@ -283,7 +283,9 @@ class _ShopGalleryPageState extends State<ShopGalleryPage> {
                         ),
                         const SizedBox(height: 8),
                         if (!product.isSoldOut)
-                          if (product.discountedPrice != null)
+                          if (product.discountedPrice != null &&
+                              product.discountedPrice! > 0 &&
+                              product.discountedPrice! < product.price)
                             Row(
                               children: [
                                 Text(
@@ -352,7 +354,9 @@ class _ShopGalleryPageState extends State<ShopGalleryPage> {
                 ),
               ),
             // Discount Badge
-            if (product.discountPercent != null && product.discountPercent! > 0)
+            if (product.discountPercent != null &&
+                product.discountPercent! > 0 &&
+                product.discountPercent! < 100)
               Positioned(
                 top: 8,
                 right: 8,

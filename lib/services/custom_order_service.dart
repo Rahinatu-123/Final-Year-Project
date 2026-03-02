@@ -140,6 +140,18 @@ class CustomOrderService {
     }
   }
 
+  /// Delete a custom order
+  Future<void> deleteOrder(String customOrderId) async {
+    try {
+      await _firestore
+          .collection(customOrdersCollection)
+          .doc(customOrderId)
+          .delete();
+    } catch (e) {
+      throw Exception('Failed to delete order: $e');
+    }
+  }
+
   /// Mark custom order as delivered
   Future<void> markAsDelivered(String customOrderId) async {
     try {

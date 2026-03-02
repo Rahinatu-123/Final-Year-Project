@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
-import '../models/order.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/shop_order.dart';
+import '../models/custom_order.dart';
 import '../services/order_service.dart';
+import '../services/shop_order_service.dart';
+import '../services/custom_order_service.dart';
 import '../theme/app_theme.dart';
 import 'order_details.dart';
+import 'shop_order_detail.dart';
+import 'my_clients.dart';
 
 class OrderListScreen extends StatefulWidget {
   final String tailorId;
@@ -15,12 +21,16 @@ class OrderListScreen extends StatefulWidget {
 
 class _OrderListScreenState extends State<OrderListScreen> {
   late OrderService orderService;
-  int _selectedTabIndex = 0; // 0: Pending, 1: Completed
+  late ShopOrderService shopOrderService;
+  late CustomOrderService customOrderService;
+  int _selectedTabIndex = 0; // 0: Custom Orders, 1: Shop Orders
 
   @override
   void initState() {
     super.initState();
     orderService = OrderService();
+    shopOrderService = ShopOrderService();
+    customOrderService = CustomOrderService();
   }
 
   @override
@@ -46,7 +56,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     child: Column(
                       children: [
                         Text(
-                          'Pending',
+                          'Custom Orders',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -74,7 +84,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                     child: Column(
                       children: [
                         Text(
-                          'Completed',
+                          'Shop Orders',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -102,17 +112,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
           // Orders list
           Expanded(
             child: _selectedTabIndex == 0
-                ? _buildPendingOrdersList()
-                : _buildCompletedOrdersList(),
+                ? _buildAllCustomOrdersList()
+                : _buildShopOrdersList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPendingOrdersList() {
-    return StreamBuilder<List<Order>>(
-      stream: orderService.getPendingOrdersStream(widget.tailorId),
+  Widget _buildShopOrdersList() {
+    return StreamBuilder<List<ShopOrder>>(
+      stream: shopOrderService.getTailorOrdersStream(widget.tailorId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -125,7 +135,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
         final orders = snapshot.data ?? [];
 
         if (orders.isEmpty) {
-          return const Center(child: Text('No pending orders'));
+          return const Center(child: Text('No shop orders'));
         }
 
         return ListView.builder(
@@ -133,53 +143,74 @@ class _OrderListScreenState extends State<OrderListScreen> {
           itemCount: orders.length,
           itemBuilder: (context, index) {
             final order = orders[index];
-            return _buildOrderCard(order);
+            return _buildShopOrderCard(order);
           },
         );
       },
     );
   }
 
-  Widget _buildCompletedOrdersList() {
-    return FutureBuilder<List<Order>>(
-      future: orderService.getCompletedOrdersForTailor(widget.tailorId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+  Widget _buildShopOrderCard(ShopOrder order) {
+    // Determine urgency color based on timeline if available
+    Color urgencyColor;
+    if (order.estimatedDelivery != null) {
+      urgencyColor = _getUrgencyColorFromString(order.getUrgencyColor());
+    } else {
+      // Fall back to status-based color
+      switch (order.status) {
+        case ShopOrderStatus.pending:
+          urgencyColor = Colors.orange;
+          break;
+        case ShopOrderStatus.confirmed:
+          urgencyColor = Colors.blue;
+          break;
+        case ShopOrderStatus.inProgress:
+          urgencyColor = Colors.purple;
+          break;
+        case ShopOrderStatus.ready:
+          urgencyColor = Colors.green;
+          break;
+        case ShopOrderStatus.completed:
+          urgencyColor = Colors.green;
+          break;
+        case ShopOrderStatus.cancelled:
+          urgencyColor = Colors.red;
+          break;
+      }
+    }
 
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
-        }
+    String statusText;
+    switch (order.status) {
+      case ShopOrderStatus.pending:
+        statusText = 'Pending';
+        break;
+      case ShopOrderStatus.confirmed:
+        statusText = 'Confirmed';
+        break;
+      case ShopOrderStatus.inProgress:
+        statusText = 'In Progress';
+        break;
+      case ShopOrderStatus.ready:
+        statusText = 'Ready';
+        break;
+      case ShopOrderStatus.completed:
+        statusText = 'Completed';
+        break;
+      case ShopOrderStatus.cancelled:
+        statusText = 'Cancelled';
+        break;
+    }
 
-        final orders = snapshot.data ?? [];
-
-        if (orders.isEmpty) {
-          return const Center(child: Text('No completed orders'));
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            final order = orders[index];
-            return _buildOrderCard(order);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildOrderCard(Order order) {
-    final urgencyColor = _getUrgencyColorFromString(order.getUrgencyColor());
     final daysRemaining = order.daysRemaining();
+    final hasTimeline = order.estimatedDelivery != null;
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => OrderDetailsScreen(order: order),
+            builder: (context) =>
+                ShopOrderDetailScreen(orderId: order.id, isForTailor: true),
           ),
         );
       },
@@ -190,11 +221,11 @@ class _OrderListScreenState extends State<OrderListScreen> {
           side: BorderSide(color: urgencyColor.withOpacity(0.2), width: 1.5),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header: Client name and style
+              // Header: Product name and status
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -203,40 +234,40 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          order.clientName,
+                          order.productName,
                           style: const TextStyle(
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          order.style,
+                          'Qty: ${order.quantity} | GHS ${order.getTotalPrice().toStringAsFixed(2)}',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  // Status badge
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
+                      horizontal: 10,
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
                       color: urgencyColor.withOpacity(0.1),
                       border: Border.all(color: urgencyColor),
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Text(
-                      order.status.toString().split('.').last.toUpperCase(),
+                      statusText,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: urgencyColor,
                       ),
@@ -245,65 +276,286 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              // Timeline bar
-              _buildTimelineBar(
-                daysRemaining,
-                order.daysEstimate,
-                urgencyColor,
-              ),
-              const SizedBox(height: 12),
-              // Footer: Days remaining and tags
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    daysRemaining == 0
-                        ? 'Completed'
-                        : '$daysRemaining days remaining',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: urgencyColor,
-                      fontWeight: FontWeight.w600,
+              // Timeline bar (if delivery date exists)
+              if (hasTimeline)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildTimelineBar(
+                      daysRemaining,
+                      order.estimatedDelivery!
+                          .difference(order.createdAt)
+                          .inDays,
+                      urgencyColor,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          daysRemaining == 0
+                              ? 'Due today'
+                              : '$daysRemaining days remaining',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: urgencyColor,
+                          ),
+                        ),
+                        Text(
+                          'Due: ${order.estimatedDelivery!.toString().split(' ')[0]}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              // Product image
+              if (order.productImages.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      order.productImages.first,
+                      height: 60,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox(height: 60),
                     ),
                   ),
-                  if ((order.tags?.isNotEmpty ?? false))
-                    SizedBox(
-                      height: 24,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: order.tags!
-                            .take(2)
-                            .map(
-                              (tag) => Container(
-                                margin: const EdgeInsets.only(right: 6),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  tag,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: AppColors.primary,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ),
-                ],
-              ),
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildAllCustomOrdersList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('custom_orders')
+          .where('tailorId', isEqualTo: widget.tailorId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.shopping_bag_outlined,
+                  size: 64,
+                  color: AppColors.textSecondary.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No custom orders yet',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Add a client to create an order',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final customOrders = snapshot.data!.docs
+            .map(
+              (doc) => CustomOrder.fromMap(
+                doc.data() as Map<String, dynamic>,
+                doc.id,
+              ),
+            )
+            .toList();
+
+        // Sort by createdAt descending
+        customOrders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: customOrders.length,
+          itemBuilder: (context, index) {
+            final order = customOrders[index];
+            return _buildCustomOrderCard(order);
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomOrderCard(CustomOrder order) {
+    final urgency = order.getDeliveryUrgency();
+    final urgencyColor = _getUrgencyColor(urgency);
+    final daysRemaining = order.daysRemaining();
+    final progressPercent =
+        ((order.daysToDeliver - daysRemaining) / order.daysToDeliver) * 100;
+
+    return GestureDetector(
+      onTap: () {
+        // Navigate to order details if needed
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: urgencyColor.withOpacity(0.2), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Style Image
+            if (order.styleImageUrl != null && order.styleImageUrl!.isNotEmpty)
+              Container(
+                width: double.infinity,
+                height: 150,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
+                  ),
+                  child: Image.network(
+                    order.styleImageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: Colors.grey[200],
+                      child: const Center(
+                        child: Icon(Icons.broken_image, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // Details
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Style & Price
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              order.style,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              order.clientName,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        'GH₵${order.basePrice.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: urgencyColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Timeline
+                  Text(
+                    'Timeline: $daysRemaining days remaining',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: urgencyColor,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progressPercent / 100,
+                      minHeight: 6,
+                      backgroundColor: urgencyColor.withOpacity(0.2),
+                      valueColor: AlwaysStoppedAnimation<Color>(urgencyColor),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getUrgencyColor(DeliveryUrgency urgency) {
+    switch (urgency) {
+      case DeliveryUrgency.green:
+        return const Color(0xFF2D6A4F);
+      case DeliveryUrgency.yellow:
+        return const Color(0xFFE8A855);
+      case DeliveryUrgency.red:
+        return const Color(0xFFBA1A1A);
+    }
+  }
+
+  Color _getUrgencyColorFromString(String colorString) {
+    switch (colorString) {
+      case '#2D6A4F':
+        return const Color(0xFF2D6A4F); // Green
+      case '#E8A855':
+        return const Color(0xFFE8A855); // Yellow/Orange
+      case '#BA1A1A':
+        return const Color(0xFFBA1A1A); // Red
+      default:
+        return AppColors.primary;
+    }
   }
 
   Widget _buildTimelineBar(int daysRemaining, int totalDays, Color color) {
@@ -324,18 +576,5 @@ class _OrderListScreenState extends State<OrderListScreen> {
         ),
       ],
     );
-  }
-
-  Color _getUrgencyColorFromString(String colorString) {
-    switch (colorString) {
-      case '#2D6A4F':
-        return const Color(0xFF2D6A4F); // Green
-      case '#E8A855':
-        return const Color(0xFFE8A855); // Yellow/Orange
-      case '#BA1A1A':
-        return const Color(0xFFBA1A1A); // Red
-      default:
-        return AppColors.primary;
-    }
   }
 }

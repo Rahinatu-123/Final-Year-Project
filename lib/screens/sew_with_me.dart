@@ -384,7 +384,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
               // Filter for tailor and seamstress roles
               final tailors = snapshot.data!.docs.where((doc) {
                 final role = (doc['role'] ?? '').toString().toLowerCase();
-                return role == 'tailor' || role == 'seamstress';
+                return role.contains('tailor') || role.contains('seamstress');
               }).toList();
 
               return DropdownButtonFormField<String>(

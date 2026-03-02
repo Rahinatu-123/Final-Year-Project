@@ -229,30 +229,126 @@ class FabricSellerService {
 
   // ==================== ANALYTICS OPERATIONS ====================
 
-  /// Get sales overview for seller
+  /// Get sales overview for seller (includes both fabric orders and shop orders)
   Future<Map<String, dynamic>> getSalesOverview(String sellerId) async {
     try {
-      final snapshot = await _firestore
+      // Get fabric orders (delivered only)
+      final fabricSnapshot = await _firestore
           .collection('fabric_orders')
           .where('sellerId', isEqualTo: sellerId)
           .where('status', isEqualTo: 'delivered')
           .get();
 
-      double totalRevenue = 0;
-      for (var doc in snapshot.docs) {
-        totalRevenue += (doc['totalPrice'] ?? 0).toDouble();
+      double fabricRevenue = 0;
+      for (var doc in fabricSnapshot.docs) {
+        fabricRevenue += (doc['totalPrice'] ?? 0).toDouble();
       }
 
+      // Get shop orders (all statuses to count pending orders too)
+      final shopSnapshot = await _firestore
+          .collection('shop_orders')
+          .where('tailorId', isEqualTo: sellerId)
+          .get();
+
+      double shopRevenue = 0;
+      int completedShopOrders = 0;
+
+      for (var doc in shopSnapshot.docs) {
+        final data = doc.data();
+        final productPrice = (data['productPrice'] ?? 0).toDouble();
+        final discountedPrice = data['discountedPrice'] as double?;
+        final quantity = (data['quantity'] ?? 1).toInt();
+        final price = (discountedPrice != null && discountedPrice > 0)
+            ? discountedPrice
+            : productPrice;
+        final orderTotal = price * quantity;
+
+        shopRevenue += orderTotal;
+
+        // Count completed orders
+        if (data['status'] == 'completed') {
+          completedShopOrders++;
+        }
+      }
+
+      // Combine totals
+      final totalRevenue = fabricRevenue + shopRevenue;
+      final totalOrders = fabricSnapshot.docs.length + shopSnapshot.docs.length;
+      final completedOrders = fabricSnapshot.docs.length + completedShopOrders;
+
       return {
-        'totalSales': snapshot.docs.length,
+        'totalSales': totalOrders,
+        'completedSales': completedOrders,
         'totalRevenue': totalRevenue,
-        'averageOrderValue': snapshot.docs.isEmpty
-            ? 0
-            : totalRevenue / snapshot.docs.length,
+        'averageOrderValue': totalOrders == 0 ? 0 : totalRevenue / totalOrders,
+        'pendingOrders': shopSnapshot.docs.length - completedShopOrders,
       };
     } catch (e) {
       throw Exception('Failed to fetch sales overview: $e');
     }
+  }
+
+  /// Stream sales overview for real-time updates (includes both fabric and shop orders)
+  Stream<Map<String, dynamic>> streamSalesOverview(String sellerId) {
+    return _firestore
+        .collection('fabric_orders')
+        .where('sellerId', isEqualTo: sellerId)
+        .snapshots()
+        .asyncMap((fabricSnapshot) async {
+          // Get shop orders snapshot
+          final shopSnapshot = await _firestore
+              .collection('shop_orders')
+              .where('tailorId', isEqualTo: sellerId)
+              .get();
+
+          // Calculate fabric revenue (only delivered)
+          double fabricRevenue = 0;
+          for (var doc in fabricSnapshot.docs) {
+            if (doc['status'] == 'delivered') {
+              fabricRevenue += (doc['totalPrice'] ?? 0).toDouble();
+            }
+          }
+
+          // Calculate shop revenue and completed count
+          double shopRevenue = 0;
+          int completedShopOrders = 0;
+
+          for (var doc in shopSnapshot.docs) {
+            final data = doc.data();
+            final productPrice = (data['productPrice'] ?? 0).toDouble();
+            final discountedPrice = data['discountedPrice'] as double?;
+            final quantity = (data['quantity'] ?? 1).toInt();
+            final price = (discountedPrice != null && discountedPrice > 0)
+                ? discountedPrice
+                : productPrice;
+            final orderTotal = price * quantity;
+
+            shopRevenue += orderTotal;
+
+            if (data['status'] == 'completed') {
+              completedShopOrders++;
+            }
+          }
+
+          // Combine totals
+          final totalRevenue = fabricRevenue + shopRevenue;
+          final totalOrders =
+              fabricSnapshot.docs.length + shopSnapshot.docs.length;
+          final deliveredFabric = fabricSnapshot.docs
+              .where((doc) => doc['status'] == 'delivered')
+              .length;
+          final completedOrders = deliveredFabric + completedShopOrders;
+
+          return {
+            'totalSales': totalOrders,
+            'completedSales': completedOrders,
+            'totalRevenue': totalRevenue,
+            'averageOrderValue': totalOrders == 0
+                ? 0
+                : totalRevenue / totalOrders,
+            'pendingOrders': (shopSnapshot.docs.length - completedShopOrders),
+          };
+        });
   }
 
   /// Get best selling fabrics
