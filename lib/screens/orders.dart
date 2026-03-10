@@ -12,12 +12,14 @@ class OrdersScreen extends StatefulWidget {
   final String tailorId;
   final String clientId;
   final String clientName;
+  final bool isFabricSeller;
 
   const OrdersScreen({
     Key? key,
     required this.tailorId,
     required this.clientId,
     required this.clientName,
+    this.isFabricSeller = false,
   }) : super(key: key);
 
   @override
@@ -30,6 +32,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   final TextEditingController _styleController = TextEditingController();
   final TextEditingController _measurementsController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _daysController = TextEditingController(
     text: '7',
@@ -45,6 +48,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   void dispose() {
     _styleController.dispose();
     _measurementsController.dispose();
+    _quantityController.dispose();
     _priceController.dispose();
     _daysController.dispose();
     super.dispose();
@@ -52,6 +56,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final itemLabel = _itemLabel;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.clientName} - Orders'),
@@ -150,7 +156,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Custom Orders',
+                            widget.isFabricSeller
+                                ? 'Fabric Orders'
+                                : 'Custom Orders',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -338,13 +346,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Future<void> _showOrderDialog({CustomOrder? existingOrder}) async {
     final isEdit = existingOrder != null;
+    final itemLabel = _itemLabel;
+    final galleryLabel = _galleryLabel;
 
-    _styleController.text = existingOrder?.style == 'Custom style'
+    _styleController.text =
+        existingOrder?.style == 'Custom style' ||
+            existingOrder?.style == 'Custom fabric'
         ? ''
         : (existingOrder?.style ?? '');
     _measurementsController.text = existingOrder?.measurements == 'Not provided'
         ? ''
         : (existingOrder?.measurements ?? '');
+    _quantityController.text = widget.isFabricSeller
+        ? _extractFabricQuantity(existingOrder?.measurements ?? '')
+        : '';
     _priceController.text = existingOrder == null
         ? ''
         : existingOrder.basePrice.toString();
@@ -431,9 +446,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ),
                       ),
                       child: Text(
-                        isEdit
-                            ? 'Edit Order (All Fields Optional)'
-                            : 'Add Order (All Fields Optional)',
+                        widget.isFabricSeller
+                            ? (isEdit
+                                  ? 'Edit Fabric Order'
+                                  : 'Add Fabric Order')
+                            : (isEdit
+                                  ? 'Edit Order (All Fields Optional)'
+                                  : 'Add Order (All Fields Optional)'),
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 17,
@@ -449,20 +468,40 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           children: [
                             TextField(
                               controller: _styleController,
-                              decoration: const InputDecoration(
-                                labelText: 'Style (optional)',
-                                hintText: 'e.g., Dress',
+                              decoration: InputDecoration(
+                                labelText: '$itemLabel (optional)',
+                                hintText: widget.isFabricSeller
+                                    ? 'e.g., Ankara Cotton'
+                                    : 'e.g., Dress',
                               ),
                             ),
                             const SizedBox(height: 12),
                             TextField(
                               controller: _measurementsController,
                               maxLines: 4,
-                              decoration: const InputDecoration(
-                                labelText: 'Measurements (optional)',
-                                hintText: 'Chest: 36, Waist: 30',
+                              decoration: InputDecoration(
+                                labelText: widget.isFabricSeller
+                                    ? 'Fabric Details (optional)'
+                                    : 'Measurements (optional)',
+                                hintText: widget.isFabricSeller
+                                    ? 'Color, pattern, width, notes'
+                                    : 'Chest: 36, Waist: 30',
                               ),
                             ),
+                            if (widget.isFabricSeller) ...[
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: _quantityController,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Quantity (yards, optional)',
+                                  hintText: 'e.g., 5.5',
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 12),
                             TextField(
                               controller: _priceController,
@@ -483,8 +522,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            const Text(
-                              'Style Image (optional)',
+                            Text(
+                              widget.isFabricSeller
+                                  ? 'Fabric Reference Image (optional)'
+                                  : '$itemLabel Image (optional)',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textPrimary,
@@ -540,7 +581,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   color: AppColors.primary.withOpacity(0.06),
                                 ),
                                 alignment: Alignment.center,
-                                child: const Text('No style image selected'),
+                                child: Text(
+                                  'No ${itemLabel.toLowerCase()} image selected',
+                                ),
                               ),
                             const SizedBox(height: 10),
                             Wrap(
@@ -550,7 +593,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   onPressed: () =>
                                       selectStyleFromGallery(setDialogState),
                                   icon: const Icon(Icons.collections),
-                                  label: const Text('Style Gallery'),
+                                  label: Text(galleryLabel),
                                 ),
                                 OutlinedButton.icon(
                                   onPressed: () => pickStyleImage(
@@ -631,11 +674,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (shouldSave != true) return;
 
     final style = _styleController.text.trim().isEmpty
-        ? 'Custom style'
+        ? (widget.isFabricSeller ? 'Custom fabric' : 'Custom style')
         : _styleController.text.trim();
-    final measurements = _measurementsController.text.trim().isEmpty
-        ? 'Not provided'
-        : _measurementsController.text.trim();
+    final measurements = widget.isFabricSeller
+        ? _buildFabricDetails(
+            details: _measurementsController.text.trim(),
+            quantityYards: _quantityController.text.trim(),
+          )
+        : (_measurementsController.text.trim().isEmpty
+              ? 'Not provided'
+              : _measurementsController.text.trim());
     final price = double.tryParse(_priceController.text.trim()) ?? 0.0;
     final parsedDays = int.tryParse(_daysController.text.trim()) ?? 7;
     final days = parsedDays <= 0 ? 7 : parsedDays;
@@ -730,6 +778,39 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return null;
     }
   }
+
+  String get _itemLabel => widget.isFabricSeller ? 'Fabric' : 'Style';
+
+  String get _galleryLabel =>
+      widget.isFabricSeller ? 'Fabric Gallery' : 'Style Gallery';
+
+  String _buildFabricDetails({
+    required String details,
+    required String quantityYards,
+  }) {
+    final cleanDetails = details.trim();
+    final cleanQty = quantityYards.trim();
+
+    if (cleanDetails.isEmpty && cleanQty.isEmpty) {
+      return 'Not provided';
+    }
+    if (cleanDetails.isEmpty) {
+      return 'Qty: $cleanQty yards';
+    }
+    if (cleanQty.isEmpty) {
+      return cleanDetails;
+    }
+    return '$cleanDetails | Qty: $cleanQty yards';
+  }
+
+  String _extractFabricQuantity(String measurementText) {
+    final regex = RegExp(
+      r'Qty:\s*([0-9]+(?:\.[0-9]+)?)\s*yards',
+      caseSensitive: false,
+    );
+    final match = regex.firstMatch(measurementText);
+    return match?.group(1) ?? '';
+  }
 }
 
 class OrderDetailCard extends StatelessWidget {
@@ -753,8 +834,9 @@ class OrderDetailCard extends StatelessWidget {
     final urgency = order.getDeliveryUrgency();
     final urgencyColor = _getUrgencyColor(urgency);
     final daysRemaining = order.daysRemaining();
-    final progressPercent =
-        ((order.daysToDeliver - daysRemaining) / order.daysToDeliver) * 100;
+    final progressPercent = order.daysToDeliver <= 0
+        ? 0.0
+        : ((order.daysToDeliver - daysRemaining) / order.daysToDeliver) * 100;
 
     return GestureDetector(
       onTap: onTap,

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/fabric_order.dart';
 import '../models/shop_order.dart';
@@ -21,12 +20,11 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
   final FabricSellerService _fabricService = FabricSellerService();
   final ShopOrderService _shopOrderService = ShopOrderService();
 
-  FabricOrderStatus? _selectedStatus;
   String _orderType = 'all'; // 'all', 'fabric', 'shop'
   bool _isLoading = true;
 
-  late List<FabricOrder> _fabricOrders;
-  late List<ShopOrder> _shopOrders;
+  List<FabricOrder> _fabricOrders = [];
+  List<ShopOrder> _shopOrders = [];
 
   @override
   void initState() {
@@ -59,15 +57,6 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
       );
       print('Loaded ${fabricOrders.length} fabric orders');
 
-      // Get all shop orders for debugging
-      final allShopOrdersSnapshot = await FirebaseFirestore.instance
-          .collection('shop_orders')
-          .limit(100)
-          .get();
-      print(
-        'Total shop orders in collection: ${allShopOrdersSnapshot.docs.length}',
-      );
-
       // Get shop orders using getTailorOrdersStream and convert to Future
       final shopOrdersStream = _shopOrderService.getTailorOrdersStream(
         widget.sellerId,
@@ -88,27 +77,44 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
     } catch (e) {
       print('Error loading orders: $e');
       setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error loading orders: $e')));
     }
   }
 
+  Future<void> _markFabricOrderComplete(FabricOrder order) async {
+    if (order.status == FabricOrderStatus.delivered ||
+        order.status == FabricOrderStatus.cancelled) {
+      return;
+    }
+
+    try {
+      await _fabricService.updateOrderStatus(
+        order.id,
+        FabricOrderStatus.delivered,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Order marked as completed')),
+      );
+      await _loadOrders();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to complete order: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Filter fabric orders by status
-    final filteredFabricOrders = _selectedStatus == null
-        ? _fabricOrders
-        : _fabricOrders
-              .where((order) => order.status == _selectedStatus)
-              .toList();
-
     // Combine display lists based on order type filter
     final displayCount = _orderType == 'all'
-        ? filteredFabricOrders.length + _shopOrders.length
-        : (_orderType == 'fabric'
-              ? filteredFabricOrders.length
-              : _shopOrders.length);
+        ? _fabricOrders.length + _shopOrders.length
+        : (_orderType == 'fabric' ? _fabricOrders.length : _shopOrders.length);
 
     return Scaffold(
       appBar: AppBar(
@@ -158,42 +164,6 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
                       ),
                     ),
                   ),
-                  // Status Filter (only for fabric orders)
-                  if (_orderType == 'all' || _orderType == 'fabric')
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            FilterChip(
-                              label: const Text('All Statuses'),
-                              selected: _selectedStatus == null,
-                              onSelected: (selected) {
-                                setState(() => _selectedStatus = null);
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            ...FabricOrderStatus.values.map((status) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8.0),
-                                child: FilterChip(
-                                  label: Text(_getStatusLabel(status)),
-                                  selected: _selectedStatus == status,
-                                  onSelected: (selected) {
-                                    setState(() {
-                                      _selectedStatus = selected
-                                          ? status
-                                          : null;
-                                    });
-                                  },
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        ),
-                      ),
-                    ),
                   // Orders List
                   Expanded(
                     child: displayCount == 0
@@ -204,20 +174,19 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
                             itemBuilder: (context, index) {
                               if (_orderType == 'fabric') {
                                 return _buildFabricOrderCard(
-                                  filteredFabricOrders[index],
+                                  _fabricOrders[index],
                                 );
                               } else if (_orderType == 'shop') {
                                 return _buildShopOrderCard(_shopOrders[index]);
                               } else {
                                 // All orders - fabric orders first, then shop orders
-                                if (index < filteredFabricOrders.length) {
+                                if (index < _fabricOrders.length) {
                                   return _buildFabricOrderCard(
-                                    filteredFabricOrders[index],
+                                    _fabricOrders[index],
                                   );
                                 } else {
                                   return _buildShopOrderCard(
-                                    _shopOrders[index -
-                                        filteredFabricOrders.length],
+                                    _shopOrders[index - _fabricOrders.length],
                                   );
                                 }
                               }
@@ -286,7 +255,7 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    order.getStatusString(),
+                    _getTimelineBadge(order),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -344,6 +313,8 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
                   );
                 }).toList(),
                 const Divider(height: 16),
+                _buildTimelineSection(order),
+                const Divider(height: 16),
                 // Order Meta Information
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -356,7 +327,7 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
                           style: const TextStyle(fontSize: 11),
                         ),
                         Text(
-                          'Status: ${order.paymentStatus}',
+                          'Payment: ${order.paymentStatus}',
                           style: const TextStyle(fontSize: 11),
                         ),
                       ],
@@ -380,25 +351,48 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
                   ],
                 ),
                 const SizedBox(height: 12),
-                // Action Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      _showOrderDetailsDialog(order);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                // Actions
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          _showOrderDetailsDialog(order);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'View Details',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
-                    child: const Text(
-                      'View Details',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                  ),
+                    if (order.status != FabricOrderStatus.delivered &&
+                        order.status != FabricOrderStatus.cancelled) ...[
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => _markFabricOrderComplete(order),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            side: BorderSide(color: AppColors.primary),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Mark Complete',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -543,19 +537,72 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
     }
   }
 
-  String _getStatusLabel(FabricOrderStatus status) {
-    switch (status) {
-      case FabricOrderStatus.pending:
-        return 'Pending';
-      case FabricOrderStatus.processing:
-        return 'Processing';
-      case FabricOrderStatus.readyForPickup:
-        return 'Ready';
-      case FabricOrderStatus.delivered:
-        return 'Delivered';
-      case FabricOrderStatus.cancelled:
-        return 'Cancelled';
+  String _getTimelineBadge(FabricOrder order) {
+    if (order.status == FabricOrderStatus.delivered) return 'Completed';
+    if (order.status == FabricOrderStatus.cancelled) return 'Cancelled';
+
+    final days = order.daysRemaining();
+    if (days == 0) return 'Due today';
+    return '$days day(s) left';
+  }
+
+  Widget _buildTimelineSection(FabricOrder order) {
+    final totalDays = order.estimatedDays ?? 0;
+    final remainingDays = order.daysRemaining();
+    final urgencyColor = _getUrgencyColor(order);
+
+    if (totalDays <= 0 ||
+        order.status == FabricOrderStatus.delivered ||
+        order.status == FabricOrderStatus.cancelled) {
+      return Text(
+        order.getStatusString(),
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: urgencyColor,
+        ),
+      );
     }
+
+    final elapsed = (totalDays - remainingDays).clamp(0, totalDays).toDouble();
+    final progress = totalDays == 0
+        ? 0.0
+        : (elapsed / totalDays).clamp(0.0, 1.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 8,
+            backgroundColor: urgencyColor.withOpacity(0.15),
+            valueColor: AlwaysStoppedAnimation<Color>(urgencyColor),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              remainingDays == 0
+                  ? 'Due today'
+                  : '$remainingDays day(s) remaining',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: urgencyColor,
+              ),
+            ),
+            Text(
+              'Timeline: $totalDays day(s)',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   String _getTimeAgo(DateTime dateTime) {

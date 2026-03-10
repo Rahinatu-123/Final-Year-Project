@@ -28,7 +28,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final AudioService _audioService = AudioService();
 
-  late FlutterSoundRecorder _audioRecorder;
+  FlutterSoundRecorder? _audioRecorder;
+  Future<void>? _recorderInitFuture;
+  bool _isRecorderReady = false;
   bool _isRecording = false;
   bool _hasAllowedAudio = false;
   String? _recordingPath;
@@ -43,25 +45,30 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _messageController.addListener(_onTextChanged);
     _checkAudioPermission();
-    _initializeAudioRecorder();
+    _recorderInitFuture = _initializeAudioRecorder();
     _initializeAudioPlayer();
   }
 
-  void _initializeAudioRecorder() async {
+  Future<void> _initializeAudioRecorder() async {
     try {
-      print('Initializing recorder...');
-      _audioRecorder = FlutterSoundRecorder();
-
-      // Add a small delay to ensure system is ready
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      await _audioRecorder.openRecorder();
-
-      print('✓ Audio recorder initialized successfully');
-      print('✓ Recorder is ready to use');
+      _audioRecorder ??= FlutterSoundRecorder();
+      await _audioRecorder!.openRecorder();
+      await _audioRecorder!.setSubscriptionDuration(
+        const Duration(milliseconds: 150),
+      );
+      _isRecorderReady = true;
     } catch (e) {
-      print('✗ Error initializing recorder: $e');
-      print('✗ Stack trace: ${StackTrace.current}');
+      _isRecorderReady = false;
+      debugPrint('Error initializing recorder: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _ensureRecorderReady() async {
+    if (_isRecorderReady) return;
+    await (_recorderInitFuture ??= _initializeAudioRecorder());
+    if (!_isRecorderReady) {
+      throw Exception('Recorder not ready');
     }
   }
 
@@ -91,7 +98,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
-    _audioRecorder.closeRecorder();
+    _audioRecorder?.closeRecorder();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -264,14 +271,16 @@ class _ChatScreenState extends State<ChatScreen> {
             Widget buildMessage() {
               try {
                 if (isStyleShare) {
-                  final styleData = msgData['styleData'] as Map<String, dynamic>?;
+                  final styleData =
+                      msgData['styleData'] as Map<String, dynamic>?;
                   if (styleData != null) {
                     return _buildStyleShareBubble(styleData, isMe);
                   }
                 }
 
                 // Check if message is audio
-                final isAudio = messageType == 'audio' && msgData['audioUrl'] != null;
+                final isAudio =
+                    messageType == 'audio' && msgData['audioUrl'] != null;
                 if (isAudio) {
                   return _buildAudioBubble(
                     msgData['audioUrl'].toString(),
@@ -700,6 +709,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Show WhatsApp-style audio recording UI
   void _showAudioRecordingUI() {
+    bool isRecording = false;
+    int recordingSeconds = 0;
+    Timer? recordingTimer;
+    bool hasInitialized = false;
+
     showModalBottomSheet(
       context: context,
       isDismissible: false,
@@ -707,60 +721,33 @@ class _ChatScreenState extends State<ChatScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            bool isRecording = false;
-            int recordingSeconds = 0;
-            Timer? recordingTimer;
-            bool hasInitialized = false;
-
             Future<void> startRecording() async {
               if (hasInitialized) return;
               hasInitialized = true;
 
               try {
-                print('========== AUTO-START RECORDING ==========');
-                print('Auto-starting recording...');
-
-                // Wait a bit for recorder to be ready
-                await Future.delayed(const Duration(milliseconds: 500));
-
-                // Request permission first
-                print('Requesting microphone permission...');
                 final hasPermission = await _audioService
                     .requestMicrophonePermission();
-                print('Permission granted: $hasPermission');
                 if (!hasPermission) {
                   throw Exception('Microphone permission denied');
                 }
 
-                // Check if recorder is initialized
-                print('Checking if recorder is initialized...');
-                if (_audioRecorder == null) {
-                  throw Exception('Recorder not initialized');
-                }
-
-                print('Checking if recorder is ready...');
+                await _ensureRecorderReady();
 
                 final recordingPath = await _audioService
                     .generateAudioFilePath();
-                print('Recording path: $recordingPath');
 
                 _recordingPath = recordingPath;
 
-                // Create the file first
-                print('Creating audio file...');
-                final file = File(recordingPath);
-                await file.create(recursive: true);
-                print('File created: $recordingPath');
-
-                print('Starting recorder with path: $recordingPath');
-                await _audioRecorder.startRecorder(toFile: recordingPath);
-
-                print('✓ Recording auto-started: $recordingPath');
-                print('========== RECORDING STARTED ==========');
+                await _audioRecorder!.startRecorder(
+                  toFile: recordingPath,
+                  codec: Codec.aacADTS,
+                );
 
                 setModalState(() {
                   isRecording = true;
                 });
+                _isRecording = true;
 
                 // Start timer
                 recordingTimer = Timer.periodic(const Duration(seconds: 1), (
@@ -771,8 +758,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   });
                 });
               } catch (e) {
-                print('✗ Auto-start error: $e');
-                print('✗ Stack trace: ${StackTrace.current}');
+                debugPrint('Auto-start error: $e');
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -863,9 +849,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       GestureDetector(
                         onTap: () async {
                           recordingTimer?.cancel();
-                          if (isRecording) {
-                            await _audioRecorder.stopRecorder();
+                          if (isRecording &&
+                              (_audioRecorder?.isRecording ?? false)) {
+                            await _audioRecorder!.stopRecorder();
                           }
+                          _isRecording = false;
                           if (context.mounted) {
                             Navigator.pop(context);
                           }
@@ -890,43 +878,27 @@ class _ChatScreenState extends State<ChatScreen> {
                           if (!isRecording) {
                             // Try to manually start recording
                             try {
-                              print(
-                                '========== MANUAL START RECORDING ==========',
-                              );
-                              print('Manually starting recording...');
-
                               final hasPermission = await _audioService
                                   .requestMicrophonePermission();
                               if (!hasPermission) {
                                 throw Exception('Microphone permission denied');
                               }
 
-                              if (_audioRecorder == null) {
-                                throw Exception('Recorder not initialized');
-                              }
+                              await _ensureRecorderReady();
 
                               final recordingPath = await _audioService
                                   .generateAudioFilePath();
                               _recordingPath = recordingPath;
 
-                              final file = File(recordingPath);
-                              await file.create(recursive: true);
-
-                              print(
-                                'Starting recorder with path: $recordingPath',
-                              );
-                              await _audioRecorder.startRecorder(
+                              await _audioRecorder!.startRecorder(
                                 toFile: recordingPath,
+                                codec: Codec.aacADTS,
                               );
-
-                              print(
-                                '✓ Manual recording started: $recordingPath',
-                              );
-                              print('========== RECORDING STARTED ==========');
 
                               setModalState(() {
                                 isRecording = true;
                               });
+                              _isRecording = true;
 
                               recordingTimer = Timer.periodic(
                                 const Duration(seconds: 1),
@@ -937,8 +909,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 },
                               );
                             } catch (e) {
-                              print('✗ Manual start error: $e');
-                              print('✗ Stack trace: ${StackTrace.current}');
+                              debugPrint('Manual start error: $e');
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -953,25 +924,21 @@ class _ChatScreenState extends State<ChatScreen> {
                             // Stop and send recording
                             recordingTimer?.cancel();
                             try {
-                              print('Stopping recording...');
-                              final path = await _audioRecorder.stopRecorder();
-                              print('✓ Recording stopped. Path: $path');
+                              final path = await _audioRecorder!.stopRecorder();
+                              _isRecording = false;
 
                               if (context.mounted) {
                                 Navigator.pop(context);
                               }
 
                               if (path != null && path.isNotEmpty) {
-                                print('Sending audio: $path');
                                 await _uploadAndSendAudio(
                                   path,
                                   recordingSeconds,
                                 );
-                              } else {
-                                print('✗ No recording path returned');
                               }
                             } catch (e) {
-                              print('✗ Error stopping recording: $e');
+                              debugPrint('Error stopping recording: $e');
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('Error sending: $e')),

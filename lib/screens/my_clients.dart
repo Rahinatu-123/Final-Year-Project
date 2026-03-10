@@ -6,8 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../models/tailor_client.dart';
 import '../models/custom_order.dart';
+import '../models/fabric_order.dart';
 import '../services/tailor_client_service.dart';
 import '../services/custom_order_service.dart';
+import '../services/fabric_seller_service.dart';
 import '../theme/app_theme.dart';
 import 'orders.dart';
 import 'style_gallery.dart';
@@ -15,11 +17,13 @@ import 'style_gallery.dart';
 class MyClientsScreen extends StatefulWidget {
   final String tailorId;
   final String tailorName;
+  final bool isFabricSeller;
 
   const MyClientsScreen({
     Key? key,
     required this.tailorId,
     required this.tailorName,
+    this.isFabricSeller = false,
   }) : super(key: key);
 
   @override
@@ -32,13 +36,37 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
   List<TailorClient> clients = [];
   Map<String, int> _clientOrderCounts = {};
   bool isLoading = true;
+  bool _detectedIsFabricSeller = false;
+
+  bool get _isFabricSeller => widget.isFabricSeller || _detectedIsFabricSeller;
 
   @override
   void initState() {
     super.initState();
     clientService = TailorClientService();
     orderService = CustomOrderService();
+    _detectSellerRole();
     _loadClients();
+  }
+
+  Future<void> _detectSellerRole() async {
+    if (widget.isFabricSeller) return;
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.tailorId)
+          .get();
+      final data = userDoc.data();
+      final role = (data?['role'] ?? '').toString().toLowerCase();
+      final isSellerRole = role.contains('fabric') || role.contains('seller');
+
+      if (mounted && isSellerRole) {
+        setState(() => _detectedIsFabricSeller = true);
+      }
+    } catch (_) {
+      // Keep explicit flag/default when role lookup fails.
+    }
   }
 
   Future<void> _loadClients() async {
@@ -78,8 +106,11 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
   void _showAddClientForm() {
     showDialog(
       context: context,
-      builder: (BuildContext context) =>
-          AddClientForm(tailorId: widget.tailorId, onClientAdded: _loadClients),
+      builder: (BuildContext context) => AddClientForm(
+        tailorId: widget.tailorId,
+        onClientAdded: _loadClients,
+        isFabricSeller: _isFabricSeller,
+      ),
     );
   }
 
@@ -91,6 +122,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
           tailorId: widget.tailorId,
           clientId: client.id,
           clientName: client.name,
+          isFabricSeller: _isFabricSeller,
         ),
       ),
     ).then((_) => _loadClients());
@@ -345,11 +377,13 @@ class ClientCard extends StatelessWidget {
 class AddClientForm extends StatefulWidget {
   final String tailorId;
   final VoidCallback onClientAdded;
+  final bool isFabricSeller;
 
   const AddClientForm({
     Key? key,
     required this.tailorId,
     required this.onClientAdded,
+    this.isFabricSeller = false,
   }) : super(key: key);
 
   @override
@@ -359,6 +393,7 @@ class AddClientForm extends StatefulWidget {
 class _AddClientFormState extends State<AddClientForm> {
   late TailorClientService clientService;
   late CustomOrderService orderService;
+  final FabricSellerService _fabricSellerService = FabricSellerService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   // Form Controllers
@@ -366,6 +401,8 @@ class _AddClientFormState extends State<AddClientForm> {
   final _clientPhoneController = TextEditingController();
   final _clientEmailController = TextEditingController();
   final _styleController = TextEditingController();
+  final _yardsController = TextEditingController();
+  final _fabricDetailsController = TextEditingController();
   final _priceController = TextEditingController();
 
   // Images
@@ -399,6 +436,8 @@ class _AddClientFormState extends State<AddClientForm> {
     _clientPhoneController.dispose();
     _clientEmailController.dispose();
     _styleController.dispose();
+    _yardsController.dispose();
+    _fabricDetailsController.dispose();
     _priceController.dispose();
     for (var controller in _measurementControllers.values) {
       controller.dispose();
@@ -419,7 +458,11 @@ class _AddClientFormState extends State<AddClientForm> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                isProfilePhoto ? 'Add Profile Photo' : 'Add Style Image',
+                isProfilePhoto
+                    ? 'Add Profile Photo'
+                    : (widget.isFabricSeller
+                          ? 'Add Fabric Image'
+                          : 'Add Style Image'),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -448,8 +491,14 @@ class _AddClientFormState extends State<AddClientForm> {
                 // Style image options
                 ListTile(
                   leading: const Icon(Icons.collections),
-                  title: const Text('Style Gallery'),
-                  subtitle: const Text('Browse from style collection'),
+                  title: Text(
+                    widget.isFabricSeller ? 'Fabric Gallery' : 'Style Gallery',
+                  ),
+                  subtitle: Text(
+                    widget.isFabricSeller
+                        ? 'Browse from fabric collection'
+                        : 'Browse from style collection',
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _openStyleGallery();
@@ -516,6 +565,7 @@ class _AddClientFormState extends State<AddClientForm> {
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.all(0),
         child: _StyleGallerySelector(
+          isFabricSeller: widget.isFabricSeller,
           onStyleSelected: (styleImageUrl) {
             Navigator.pop(context, styleImageUrl);
           },
@@ -569,6 +619,16 @@ class _AddClientFormState extends State<AddClientForm> {
     return measurements.join(', ');
   }
 
+  String _buildFabricDetailsString() {
+    final details = _fabricDetailsController.text.trim();
+    final yards = _yardsController.text.trim();
+
+    if (details.isEmpty && yards.isEmpty) return 'Not provided';
+    if (details.isEmpty) return 'Yards: $yards';
+    if (yards.isEmpty) return details;
+    return '$details | Yards: $yards';
+  }
+
   void _addCustomMeasurement() {
     setState(() {
       _customMeasurements.add({
@@ -594,9 +654,15 @@ class _AddClientFormState extends State<AddClientForm> {
     }
 
     if (_styleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter style')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            widget.isFabricSeller
+                ? 'Please enter fabric name'
+                : 'Please enter style',
+          ),
+        ),
+      );
       return;
     }
 
@@ -607,20 +673,36 @@ class _AddClientFormState extends State<AddClientForm> {
       return;
     }
 
-    if (_buildMeasurementsString().isEmpty) {
+    if (!widget.isFabricSeller && _buildMeasurementsString().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add at least one measurement')),
       );
       return;
     }
 
+    if (widget.isFabricSeller && _yardsController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter yards')));
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
+      final currentUserId = _auth.currentUser?.uid ?? '';
+      final ownerId = currentUserId.isNotEmpty
+          ? currentUserId
+          : widget.tailorId;
+
+      if (ownerId.isEmpty) {
+        throw Exception('User not authenticated');
+      }
+
       // Create TailorClient
       final client = TailorClient(
         id: '',
-        tailorId: widget.tailorId,
+        tailorId: ownerId,
         name: _clientNameController.text.trim(),
         phone: _clientPhoneController.text.trim(),
         email: _clientEmailController.text.trim(),
@@ -640,15 +722,22 @@ class _AddClientFormState extends State<AddClientForm> {
         styleImageUrl = await _uploadImage(_styleImage!, 'style_photos');
       }
 
+      final parsedPrice = double.tryParse(_priceController.text.trim());
+      if (parsedPrice == null || parsedPrice <= 0) {
+        throw Exception('Please enter a valid price');
+      }
+
       // Create CustomOrder
       final order = CustomOrder(
         id: '',
-        tailorId: widget.tailorId,
+        tailorId: ownerId,
         clientName: _clientNameController.text.trim(),
         clientId: clientId,
         style: _styleController.text.trim(),
-        basePrice: double.parse(_priceController.text.trim()),
-        measurements: _buildMeasurementsString(),
+        basePrice: parsedPrice,
+        measurements: widget.isFabricSeller
+            ? _buildFabricDetailsString()
+            : _buildMeasurementsString(),
         daysToDeliver: _daysToDeliver,
         styleImageUrl: styleImageUrl,
         createdAt: DateTime.now(),
@@ -656,6 +745,45 @@ class _AddClientFormState extends State<AddClientForm> {
       );
 
       await orderService.createCustomOrder(order);
+
+      // Keep seller Orders screen in sync by writing fabric_orders too.
+      if (widget.isFabricSeller) {
+        final parsedYards = double.tryParse(_yardsController.text.trim()) ?? 0;
+        final double yards = parsedYards > 0 ? parsedYards : 1.0;
+        final details = _fabricDetailsController.text.trim();
+
+        final fabricOrder = FabricOrder(
+          id: '',
+          sellerId: ownerId,
+          sellerName: (_auth.currentUser?.displayName ?? '').trim().isNotEmpty
+              ? (_auth.currentUser?.displayName ?? '').trim()
+              : 'Fabric Seller',
+          clientId: clientId,
+          clientName: _clientNameController.text.trim(),
+          clientPhone: _clientPhoneController.text.trim(),
+          clientEmail: _clientEmailController.text.trim(),
+          items: [
+            FabricOrderItem(
+              fabricId: '',
+              fabricName: _styleController.text.trim(),
+              fabricType: _styleController.text.trim(),
+              color: '',
+              quantityYards: yards,
+              pricePerYard: parsedPrice / yards,
+              subtotal: parsedPrice,
+              fabricImages: styleImageUrl != null ? [styleImageUrl] : [],
+            ),
+          ],
+          totalPrice: parsedPrice,
+          status: FabricOrderStatus.pending,
+          createdAt: DateTime.now(),
+          deliveryMethod: 'pickup',
+          estimatedDays: _daysToDeliver,
+          notes: details.isNotEmpty ? [details] : const [],
+        );
+
+        await _fabricSellerService.createFabricOrder(fabricOrder);
+      }
 
       if (mounted) {
         Navigator.pop(context);
@@ -753,8 +881,10 @@ class _AddClientFormState extends State<AddClientForm> {
                   ),
                   const SizedBox(height: 16),
                   // Order Details
-                  const Text(
-                    'Order Details',
+                  Text(
+                    widget.isFabricSeller
+                        ? 'Fabric Order Details'
+                        : 'Order Details',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
@@ -766,14 +896,33 @@ class _AddClientFormState extends State<AddClientForm> {
                   TextFormField(
                     controller: _styleController,
                     decoration: InputDecoration(
-                      labelText: 'Style *',
-                      hintText: 'e.g., Dress, Suit, Shirt',
+                      labelText: widget.isFabricSeller ? 'Fabric *' : 'Style *',
+                      hintText: widget.isFabricSeller
+                          ? 'e.g., Ankara, Lace, Kente'
+                          : 'e.g., Dress, Suit, Shirt',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
                     onChanged: (value) => setState(() {}),
                   ),
+                  if (widget.isFabricSeller) ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _yardsController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Yards *',
+                        hintText: 'e.g., 5.5',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (value) => setState(() {}),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   // Style Image
                   GestureDetector(
@@ -884,7 +1033,7 @@ class _AddClientFormState extends State<AddClientForm> {
                                 ),
                                 const SizedBox(height: 8),
                                 const Text(
-                                  'Tap to add style image',
+                                  'Tap to add image',
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
@@ -896,6 +1045,20 @@ class _AddClientFormState extends State<AddClientForm> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  if (widget.isFabricSeller)
+                    TextFormField(
+                      controller: _fabricDetailsController,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: 'Fabric Details (optional)',
+                        hintText: 'Color, pattern, material notes',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onChanged: (value) => setState(() {}),
+                    ),
+                  if (widget.isFabricSeller) const SizedBox(height: 12),
                   // Price
                   TextFormField(
                     controller: _priceController,
@@ -911,156 +1074,159 @@ class _AddClientFormState extends State<AddClientForm> {
                     ),
                     onChanged: (value) => setState(() {}),
                   ),
-                  const SizedBox(height: 20),
-                  // Section: Measurements
-                  const Text(
-                    'Measurements',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                  if (!widget.isFabricSeller) ...[
+                    const SizedBox(height: 20),
+                    // Section: Measurements
+                    const Text(
+                      'Measurements',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 2.5,
-                    children: _measurementControllers.entries.map((entry) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            entry.key,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          TextField(
-                            controller: entry.value,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: 'e.g., 40',
-                              suffix: const Text(
-                                '"',
-                                style: TextStyle(fontSize: 11),
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 6,
-                              ),
-                              isDense: true,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    }).toList(),
-                  ),
-                  // Custom Measurements
-                  if (_customMeasurements.isNotEmpty) ...[
                     const SizedBox(height: 12),
-                    ..._customMeasurements.asMap().entries.map((entry) {
-                      int index = entry.key;
-                      Map<String, TextEditingController> measurement =
-                          entry.value;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
+                    GridView.count(
+                      crossAxisCount: 2,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 2.5,
+                      children: _measurementControllers.entries.map((entry) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Expanded(
-                              flex: 1,
-                              child: TextField(
-                                controller: measurement['label'],
-                                decoration: InputDecoration(
-                                  hintText: 'Label',
-                                  isDense: true,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 6,
-                                  ),
-                                ),
+                            Text(
+                              entry.key,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textSecondary,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              flex: 1,
-                              child: TextField(
-                                controller: measurement['value'],
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                decoration: InputDecoration(
-                                  hintText: 'Value',
-                                  suffix: const Text(
-                                    '"',
-                                    style: TextStyle(fontSize: 11),
+                            const SizedBox(height: 4),
+                            TextField(
+                              controller: entry.value,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
                                   ),
-                                  isDense: true,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 6,
-                                  ),
+                              decoration: InputDecoration(
+                                hintText: 'e.g., 40',
+                                suffix: const Text(
+                                  '"',
+                                  style: TextStyle(fontSize: 11),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () => _removeCustomMeasurement(index),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.1),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 6,
+                                ),
+                                isDense: true,
+                                border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 18,
-                                  color: Colors.red,
                                 ),
                               ),
                             ),
                           ],
+                        );
+                      }).toList(),
+                    ),
+                    // Custom Measurements
+                    if (_customMeasurements.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      ..._customMeasurements.asMap().entries.map((entry) {
+                        int index = entry.key;
+                        Map<String, TextEditingController> measurement =
+                            entry.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 1,
+                                child: TextField(
+                                  controller: measurement['label'],
+                                  decoration: InputDecoration(
+                                    hintText: 'Label',
+                                    isDense: true,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 6,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 1,
+                                child: TextField(
+                                  controller: measurement['value'],
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Value',
+                                    suffix: const Text(
+                                      '"',
+                                      style: TextStyle(fontSize: 11),
+                                    ),
+                                    isDense: true,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 6,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () => _removeCustomMeasurement(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _addCustomMeasurement,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
                         ),
-                      );
-                    }).toList(),
-                  ],
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: _addCustomMeasurement,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.primary,
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.add, size: 18),
-                          SizedBox(width: 4),
-                          Text('Add Custom Measurement'),
-                        ],
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add, size: 18),
+                            SizedBox(width: 4),
+                            Text('Add Custom Measurement'),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 20),
                   // Section: Delivery
                   Column(
@@ -1135,8 +1301,12 @@ class _AddClientFormState extends State<AddClientForm> {
 /// Style Gallery Selector widget for selecting styles
 class _StyleGallerySelector extends StatefulWidget {
   final Function(String) onStyleSelected;
+  final bool isFabricSeller;
 
-  const _StyleGallerySelector({required this.onStyleSelected});
+  const _StyleGallerySelector({
+    required this.onStyleSelected,
+    this.isFabricSeller = false,
+  });
 
   @override
   State<_StyleGallerySelector> createState() => _StyleGallerySelectorState();
@@ -1173,7 +1343,7 @@ class _StyleGallerySelectorState extends State<_StyleGallerySelector> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Select Style",
+          "Select Item",
           style: TextStyle(
             color: AppColors.textPrimary,
             fontWeight: FontWeight.bold,
@@ -1230,9 +1400,11 @@ class _StyleGallerySelectorState extends State<_StyleGallerySelector> {
 
     return StreamBuilder<QuerySnapshot>(
       stream: selectedCategory == 'All'
-          ? FirebaseFirestore.instance.collection('styles').snapshots()
+          ? FirebaseFirestore.instance
+                .collection(widget.isFabricSeller ? 'fabrics' : 'styles')
+                .snapshots()
           : FirebaseFirestore.instance
-                .collection('styles')
+                .collection(widget.isFabricSeller ? 'fabrics' : 'styles')
                 .where('category', isEqualTo: selectedCategory)
                 .snapshots(),
       builder: (context, snapshot) {

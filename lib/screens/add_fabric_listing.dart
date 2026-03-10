@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../theme/app_theme.dart';
 import '../models/fabric.dart';
 import '../services/fabric_seller_service.dart';
@@ -26,13 +27,9 @@ class _AddFabricListingState extends State<AddFabricListing> {
   // Form Fields
   FabricType _selectedType = FabricType.cotton;
   String _color = '';
-  String _pattern = '';
   double _pricePerYard = 0;
   int _quantityAvailable = 0;
   double _fabricWidth = 0;
-  String _weight = '';
-  String _texture = '';
-  String _careInstructions = '';
   List<String> _tags = [];
   List<String> _imageUrls = [];
 
@@ -94,18 +91,6 @@ class _AddFabricListingState extends State<AddFabricListing> {
                       onChanged: (value) => _color = value,
                     ),
                     const SizedBox(height: 16),
-                    // Pattern
-                    TextFormField(
-                      decoration: InputDecoration(
-                        labelText: 'Pattern',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      validator: (value) =>
-                          value?.isEmpty ?? true ? 'Enter pattern' : null,
-                      onChanged: (value) => _pattern = value,
-                    ),
                     const SizedBox(height: 16),
                     // Price
                     TextFormField(
@@ -157,46 +142,6 @@ class _AddFabricListingState extends State<AddFabricListing> {
                           _fabricWidth = double.tryParse(value) ?? 0,
                     ),
                     const SizedBox(height: 16),
-                    // Weight
-                    TextFormField(
-                      decoration: InputDecoration(
-                        labelText: 'Weight (Light/Medium/Heavy)',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      validator: (value) =>
-                          value?.isEmpty ?? true ? 'Enter weight' : null,
-                      onChanged: (value) => _weight = value,
-                    ),
-                    const SizedBox(height: 16),
-                    // Texture
-                    TextFormField(
-                      decoration: InputDecoration(
-                        labelText: 'Texture (Smooth/Rough/etc)',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      validator: (value) =>
-                          value?.isEmpty ?? true ? 'Enter texture' : null,
-                      onChanged: (value) => _texture = value,
-                    ),
-                    const SizedBox(height: 16),
-                    // Care Instructions
-                    TextFormField(
-                      decoration: InputDecoration(
-                        labelText: 'Care Instructions',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      maxLines: 3,
-                      validator: (value) => value?.isEmpty ?? true
-                          ? 'Enter care instructions'
-                          : null,
-                      onChanged: (value) => _careInstructions = value,
-                    ),
                     const SizedBox(height: 16),
                     // Tags
                     TextFormField(
@@ -270,7 +215,10 @@ class _AddFabricListingState extends State<AddFabricListing> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       image: DecorationImage(
-                        image: NetworkImage(_imageUrls[index]),
+                        image: _imageUrls[index].startsWith('http')
+                            ? NetworkImage(_imageUrls[index])
+                            : FileImage(File(_imageUrls[index]))
+                                  as ImageProvider,
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -338,14 +286,14 @@ class _AddFabricListingState extends State<AddFabricListing> {
         sellerName: _sellerName,
         fabricType: _selectedType,
         color: _color,
-        pattern: _pattern,
+        pattern: '',
         imageUrls: _imageUrls,
         pricePerYard: _pricePerYard,
         quantityAvailable: _quantityAvailable,
         fabricWidth: _fabricWidth,
-        weight: _weight,
-        texture: _texture,
-        careInstructions: _careInstructions,
+        weight: '',
+        texture: '',
+        careInstructions: '',
         tags: _tags,
         createdAt: DateTime.now(),
       );
@@ -361,13 +309,9 @@ class _AddFabricListingState extends State<AddFabricListing> {
         setState(() {
           _imageUrls = [];
           _color = '';
-          _pattern = '';
           _pricePerYard = 0;
           _quantityAvailable = 0;
           _fabricWidth = 0;
-          _weight = '';
-          _texture = '';
-          _careInstructions = '';
           _tags = [];
         });
       }

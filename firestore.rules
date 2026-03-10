@@ -148,6 +148,17 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.customerId;
     }
 
+    // Fabric Orders collection - in-chat fabric orders between seller and client
+    match /fabric_orders/{orderId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == resource.data.sellerId || request.auth.uid == resource.data.clientId);
+      allow create: if request.auth != null &&
+        (request.auth.uid == request.resource.data.sellerId || request.auth.uid == request.resource.data.clientId);
+      allow update: if request.auth != null &&
+        (request.auth.uid == resource.data.sellerId || request.auth.uid == resource.data.clientId);
+      allow delete: if request.auth != null && request.auth.uid == resource.data.sellerId;
+    }
+
     // Group Orders collection - collaborative ordering system
     match /group_orders/{groupId} {
       // Read: any authenticated user can browse all groups

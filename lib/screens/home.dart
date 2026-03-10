@@ -9,9 +9,8 @@ import 'profile_customer.dart';
 import 'explore.dart';
 import 'tailor_dashboard.dart' as tailor_dashboard;
 import 'fabric_seller_dashboard.dart';
-import 'fabric_seller_inventory.dart';
+import 'my_shop.dart';
 import 'fabric_seller_orders.dart';
-import 'fabric_seller_shop_profile.dart';
 import 'add_fabric_listing.dart';
 import 'package:video_player/video_player.dart';
 
@@ -111,7 +110,6 @@ class _UniversalHomeState extends State<UniversalHome> {
   @override
   Widget build(BuildContext context) {
     final isFabricSeller = _role.contains('fabric') || _role.contains('seller');
-    final showLogout = isFabricSeller;
     final tabPages = _buildTabPages(isFabricSeller: isFabricSeller);
 
     if (_currentIndex >= tabPages.length) {
@@ -120,28 +118,10 @@ class _UniversalHomeState extends State<UniversalHome> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: _currentIndex == 0 ? _buildAppBar() : null,
-      body: Column(
-        children: [
-          if (showLogout)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: OutlinedButton(
-                onPressed: _logout,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text('Logout'),
-              ),
-            ),
-          Expanded(
-            child: IndexedStack(index: _currentIndex, children: tabPages),
-          ),
-        ],
-      ),
+      appBar: _currentIndex == 0
+          ? _buildAppBar(isFabricSeller: isFabricSeller)
+          : null,
+      body: IndexedStack(index: _currentIndex, children: tabPages),
       floatingActionButton: _currentIndex == 0
           ? _buildFAB(isFabricSeller: isFabricSeller)
           : null,
@@ -155,10 +135,9 @@ class _UniversalHomeState extends State<UniversalHome> {
     if (isFabricSeller) {
       return [
         const HomeFeedPage(),
-        FabricSellerInventory(sellerId: sellerId),
-        FabricSellerOrders(sellerId: sellerId),
+        const ExplorePage(),
         FabricSellerDashboard(sellerId: sellerId),
-        FabricSellerShopProfile(sellerId: sellerId),
+        const CustomerProfile(),
       ];
     }
 
@@ -301,7 +280,7 @@ class _UniversalHomeState extends State<UniversalHome> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar({required bool isFabricSeller}) {
     return AppBar(
       backgroundColor: AppColors.surface,
       elevation: 0,
@@ -360,6 +339,23 @@ class _UniversalHomeState extends State<UniversalHome> {
             onPressed: () {},
           ),
         ),
+        if (isFabricSeller)
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            onSelected: (value) {
+              if (value == 'profile') {
+                setState(() => _currentIndex = 3);
+                return;
+              }
+              if (value == 'logout') {
+                _logout();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(value: 'profile', child: Text('Profile')),
+              PopupMenuItem<String>(value: 'logout', child: Text('Logout')),
+            ],
+          ),
       ],
     );
   }
@@ -432,22 +428,21 @@ class _UniversalHomeState extends State<UniversalHome> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.inventory_2_rounded),
-                title: const Text('Open Inventory'),
+                leading: const Icon(Icons.storefront_rounded),
+                title: const Text('Open Shop'),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     this.context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          FabricSellerInventory(sellerId: sellerId),
+                      builder: (context) => MyShopScreen(sellerId: sellerId),
                     ),
                   );
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.receipt_long_rounded),
-                title: const Text('Open Orders'),
+                title: const Text('Open Sales'),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -461,14 +456,13 @@ class _UniversalHomeState extends State<UniversalHome> {
               ),
               ListTile(
                 leading: const Icon(Icons.store_rounded),
-                title: const Text('Shop Profile'),
+                title: const Text('Open Profile'),
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
                     this.context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          FabricSellerShopProfile(sellerId: sellerId),
+                      builder: (context) => const CustomerProfile(),
                     ),
                   );
                 },
@@ -484,14 +478,9 @@ class _UniversalHomeState extends State<UniversalHome> {
     final navItems = isFabricSeller
         ? [
             (Icons.home_rounded, Icons.home_outlined, 'Feed'),
-            (
-              Icons.inventory_2_rounded,
-              Icons.inventory_2_outlined,
-              'Inventory',
-            ),
-            (Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Orders'),
-            (Icons.grid_view_rounded, Icons.grid_view_outlined, 'Dashboard'),
-            (Icons.store_rounded, Icons.store_outlined, 'Shop'),
+            (Icons.explore_rounded, Icons.explore_outlined, 'Explore'),
+            (Icons.dashboard_rounded, Icons.dashboard_outlined, 'Dashboard'),
+            (Icons.person_rounded, Icons.person_outline, 'Profile'),
           ]
         : [
             (Icons.home_rounded, Icons.home_outlined, 'Feed'),

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../models/fabric_order.dart';
 import '../services/fabric_seller_service.dart';
+import 'fabric_seller_orders.dart';
+import 'my_shop.dart';
+import 'my_clients.dart';
+import 'mutual_connections.dart';
 
 class FabricSellerDashboard extends StatefulWidget {
   final String sellerId;
@@ -66,21 +69,20 @@ class _FabricSellerDashboardState extends State<FabricSellerDashboard>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'Manage Business',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildManagementCards(),
+                  const SizedBox(height: 24),
                   // Sales Overview Cards
                   Text(
-                    'Sales Overview',
+                    'Statistics',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 12),
                   _buildSalesOverviewCards(salesOverview),
-                  const SizedBox(height: 24),
-                  // Quick Stats
-                  Text(
-                    'Quick Stats',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildQuickStats(salesOverview),
                   const SizedBox(height: 24),
                   // Best Selling Fabrics
                   Text(
@@ -94,6 +96,140 @@ class _FabricSellerDashboardState extends State<FabricSellerDashboard>
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildManagementCards() {
+    return Column(
+      children: [
+        _buildActionCard(
+          title: 'Orders',
+          subtitle: 'Track fabric and shop orders',
+          icon: Icons.receipt_long_rounded,
+          color: const Color(0xFFFEB24C),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    FabricSellerOrders(sellerId: widget.sellerId),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildActionCard(
+          title: 'My Shop',
+          subtitle: 'Manage products for sale',
+          icon: Icons.storefront_rounded,
+          color: const Color(0xFFC9184A),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MyShopScreen(sellerId: widget.sellerId),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildActionCard(
+          title: 'Clients',
+          subtitle: 'Keep client profiles and requests',
+          icon: Icons.people_rounded,
+          color: const Color(0xFF6750A4),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MyClientsScreen(
+                  tailorId: widget.sellerId,
+                  tailorName: 'Fabric Seller',
+                  isFabricSeller: true,
+                ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        _buildActionCard(
+          title: 'Chats',
+          subtitle: 'Open conversations with your customers',
+          icon: Icons.chat_bubble_rounded,
+          color: const Color(0xFF008580),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const MutualConnectionsPage(),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppShadows.soft,
+          border: Border.all(color: color.withOpacity(0.2), width: 1.2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: color.withOpacity(0.7),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -156,45 +292,6 @@ class _FabricSellerDashboardState extends State<FabricSellerDashboard>
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildQuickStats(Map<String, dynamic> salesOverview) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            _buildStatRow(
-              'Average Order Value',
-              '\$${(salesOverview['averageOrderValue'] ?? 0).toStringAsFixed(2)}',
-            ),
-            const Divider(height: 16),
-            _buildStatRow(
-              'Total Revenue',
-              '\$${(salesOverview['totalRevenue'] ?? 0).toStringAsFixed(2)}',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.bodyMedium),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: AppColors.primary,
-          ),
-        ),
-      ],
     );
   }
 

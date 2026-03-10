@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../theme/app_theme.dart';
 import '../models/fabric.dart';
 import '../services/fabric_seller_service.dart';
+import 'add_fabric_listing.dart';
 
 class FabricSellerInventory extends StatefulWidget {
   final String sellerId;
@@ -94,6 +96,19 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
             },
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddFabricListing(sellerId: widget.sellerId),
+            ),
+          );
+          _loadFabrics();
+        },
+        tooltip: 'Add',
+        child: const Icon(Icons.add),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -190,7 +205,7 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
                                 crossAxisCount: 2,
                                 crossAxisSpacing: 12,
                                 mainAxisSpacing: 12,
-                                childAspectRatio: 0.8,
+                                childAspectRatio: 0.72,
                               ),
                           itemCount: _filteredFabrics.length,
                           itemBuilder: (context, index) {
@@ -256,16 +271,9 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
                     color: Colors.grey[200],
                   ),
                   child: fabric.imageUrls.isNotEmpty
-                      ? Image.network(
+                      ? _buildFabricImage(
                           fabric.imageUrls[0],
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                                color: Colors.grey[200],
-                                child: const Center(
-                                  child: Icon(Icons.image_not_supported),
-                                ),
-                              ),
                         )
                       : const Center(child: Icon(Icons.image_not_supported)),
                 ),
@@ -281,6 +289,7 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
               padding: const EdgeInsets.all(8.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   Text(
                     fabric.color,
@@ -295,7 +304,6 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
                     fabric.getFabricTypeString(),
                     style: const TextStyle(fontSize: 10),
                   ),
-                  const SizedBox(height: 4),
                   Text(
                     'GHS ${fabric.pricePerYard.toStringAsFixed(2)}/yard',
                     style: const TextStyle(
@@ -304,7 +312,6 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
                       color: AppColors.primary,
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
                     'Stock: ${fabric.quantityAvailable}',
                     style: const TextStyle(fontSize: 9),
@@ -330,14 +337,7 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
             color: Colors.grey[200],
           ),
           child: fabric.imageUrls.isNotEmpty
-              ? Image.network(
-                  fabric.imageUrls[0],
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey[200],
-                    child: const Center(child: Icon(Icons.image_not_supported)),
-                  ),
-                )
+              ? _buildFabricImage(fabric.imageUrls[0], fit: BoxFit.cover)
               : const Center(child: Icon(Icons.image_not_supported)),
         ),
         title: Text(fabric.color),
@@ -355,6 +355,26 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
         ),
       ),
     );
+  }
+
+  Widget _buildFabricImage(String imagePath, {BoxFit fit = BoxFit.cover}) {
+    return imagePath.startsWith('http')
+        ? Image.network(
+            imagePath,
+            fit: fit,
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: Colors.grey[200],
+              child: const Center(child: Icon(Icons.image_not_supported)),
+            ),
+          )
+        : Image.file(
+            File(imagePath),
+            fit: fit,
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: Colors.grey[200],
+              child: const Center(child: Icon(Icons.image_not_supported)),
+            ),
+          );
   }
 
   Widget _buildStockBadge(Fabric fabric) {

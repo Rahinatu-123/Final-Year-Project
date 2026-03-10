@@ -26,6 +26,13 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == tailorId;
     }
 
+    // Chat audio messages
+    match /chats/{chatId}/audio/{filename} {
+      allow read: if request.auth != null;
+      allow create, update: if request.auth != null;
+      allow delete: if request.auth != null;
+    }
+
     // Default: deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

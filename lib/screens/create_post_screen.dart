@@ -203,10 +203,13 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         'sharedFabricId': '',
       });
 
-      final isTailorOrSeamstress =
-          _userRole.toLowerCase().contains('tailor') ||
-          _userRole.toLowerCase().contains('seamstress');
-      if (isTailorOrSeamstress) {
+      final lowerRole = _userRole.toLowerCase();
+      final isPortfolioRole =
+          lowerRole.contains('tailor') ||
+          lowerRole.contains('seamstress') ||
+          lowerRole.contains('fabric') ||
+          lowerRole.contains('seller');
+      if (isPortfolioRole) {
         final portfolioUrls = mediaUrls.where(_isLikelyImageUrl).toList();
         if (portfolioUrls.isNotEmpty) {
           await ProfileService().addPortfolioItems(

@@ -1,10 +1,14 @@
 import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'cloudinary_service.dart';
 
 class AudioService {
-  final FirebaseStorage _firebaseStorage = FirebaseStorage.instance;
+  static const String _cloudName = CloudinaryService.cloudinaryCloudName;
+  static const String _unsignedUploadPreset =
+      CloudinaryService.cloudinaryUploadPreset;
 
   /// Request microphone permission
   Future<bool> requestMicrophonePermission() async {
@@ -18,33 +22,68 @@ class AudioService {
     return status.isGranted;
   }
 
-  /// Upload audio file to Firebase Storage
+  /// Upload audio file to Cloudinary and return the secure URL
   Future<String?> uploadAudio(
     File audioFile,
     String chatId,
     String userId,
   ) async {
     try {
+      if (!audioFile.existsSync()) {
+        throw Exception('Audio file does not exist');
+      }
+
+      if (_cloudName.trim().isEmpty || _unsignedUploadPreset.trim().isEmpty) {
+        throw Exception(
+          'Cloudinary is not configured. Set cloudinaryCloudName and cloudinaryUploadPreset in cloudinary_service.dart',
+        );
+      }
+
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final fileName = 'audio_${userId}_$timestamp.wav';
-      final ref = _firebaseStorage.ref('chats/$chatId/audio').child(fileName);
+      final fileName = 'audio_${userId}_$timestamp.aac';
+      final uploadUri = Uri.parse(
+        'https://api.cloudinary.com/v1_1/$_cloudName/video/upload',
+      );
 
-      final uploadTask = ref.putFile(audioFile);
-      final taskSnapshot = await uploadTask;
-      final downloadUrl = await taskSnapshot.ref.getDownloadURL();
+      final request = http.MultipartRequest('POST', uploadUri)
+        ..fields['upload_preset'] = _unsignedUploadPreset
+        ..fields['folder'] = 'chats/$chatId/audio'
+        ..fields['public_id'] = fileName
+        ..files.add(
+          await http.MultipartFile.fromPath(
+            'file',
+            audioFile.path,
+            filename: fileName,
+          ),
+        );
 
-      return downloadUrl;
+      final streamedResponse = await request.send();
+      final responseBody = await streamedResponse.stream.bytesToString();
+
+      if (streamedResponse.statusCode < 200 || streamedResponse.statusCode >= 300) {
+        throw Exception(
+          'Cloudinary upload failed (${streamedResponse.statusCode}): $responseBody',
+        );
+      }
+
+      final data = jsonDecode(responseBody) as Map<String, dynamic>;
+      final secureUrl = data['secure_url']?.toString();
+
+      if (secureUrl == null || secureUrl.isEmpty) {
+        throw Exception('Cloudinary upload succeeded but secure_url was missing');
+      }
+
+      return secureUrl;
     } catch (e) {
-      print('Error uploading audio: $e');
-      return null;
+      throw Exception('Audio upload failed: $e');
     }
   }
 
-  /// Delete audio file from Firebase Storage
+  /// Cloudinary unsigned uploads cannot be reliably deleted from the client.
+  /// Keep as a no-op for now unless you add a secure backend delete endpoint.
   Future<void> deleteAudio(String downloadUrl) async {
     try {
-      final ref = _firebaseStorage.refFromURL(downloadUrl);
-      await ref.delete();
+      if (downloadUrl.isEmpty) return;
     } catch (e) {
       print('Error deleting audio: $e');
     }
@@ -64,7 +103,7 @@ class AudioService {
   Future<String> generateAudioFilePath() async {
     final dir = await getAudioDirectory();
     final timestamp = DateTime.now().millisecondsSinceEpoch;
-    return '${dir.path}/audio_$timestamp.wav';
+    return '${dir.path}/audio_$timestamp.aac';
   }
 
   /// Delete local audio file

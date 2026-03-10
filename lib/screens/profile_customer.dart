@@ -39,6 +39,27 @@ class _CustomerProfileState extends State<CustomerProfile> {
   double? _businessLatitude;
   double? _businessLongitude;
 
+  bool get _isProfessionalRole {
+    final role = _userRole.toLowerCase();
+    return role.contains('tailor') ||
+        role.contains('seamstress') ||
+        role.contains('fabric') ||
+        role.contains('seller');
+  }
+
+  bool get _isFabricSellerRole {
+    final role = _userRole.toLowerCase();
+    return role.contains('fabric') || role.contains('seller');
+  }
+
+  String get _businessSectionTitle =>
+      _isFabricSellerRole ? 'Shop Information' : 'Business Information';
+
+  String get _portfolioTitle =>
+      _isFabricSellerRole ? 'Fabric Portfolio' : 'Business Portfolio';
+
+  String get _portfolioItemLabel => _isFabricSellerRole ? 'Fabric' : 'Design';
+
   @override
   void initState() {
     super.initState();
@@ -87,8 +108,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
             _displayName = data['username'] ?? data['fullName'] ?? "User";
             _userRole = data['role'] ?? "Member";
 
-            if (_userRole.toLowerCase().contains('tailor') ||
-                _userRole.toLowerCase().contains('seamstress')) {
+            if (_isProfessionalRole) {
               _businessName = data['businessName'];
               _businessAddress = data['businessAddress'];
               _businessPhone = data['businessPhone'];
@@ -303,17 +323,107 @@ class _CustomerProfileState extends State<CustomerProfile> {
     }
   }
 
+  Future<void> _showEditBusinessInfoDialog() async {
+    if (!_isProfessionalRole) return;
+
+    final businessNameController = TextEditingController(
+      text: _businessName ?? '',
+    );
+    final addressController = TextEditingController(
+      text: _businessAddress ?? '',
+    );
+    final phoneController = TextEditingController(text: _businessPhone ?? '');
+    final emailController = TextEditingController(text: _businessEmail ?? '');
+
+    final shouldSave = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(_businessSectionTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: businessNameController,
+                decoration: InputDecoration(
+                  labelText: _isFabricSellerRole
+                      ? 'Shop Name'
+                      : 'Business Name',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: addressController,
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Business Email'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldSave != true) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'businessName': businessNameController.text.trim(),
+        'businessAddress': addressController.text.trim(),
+        'businessPhone': phoneController.text.trim(),
+        'businessEmail': emailController.text.trim(),
+        'lastUpdated': Timestamp.now(),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      await _loadUserData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Business information updated')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update: $e')));
+    }
+  }
+
   Future<String?> _promptPortfolioDescription() async {
     final controller = TextEditingController();
 
     return showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Design Description'),
+        title: Text('$_portfolioItemLabel Description'),
         content: TextField(
           controller: controller,
           maxLines: 3,
-          decoration: const InputDecoration(hintText: 'Describe this design'),
+          decoration: InputDecoration(
+            hintText: 'Describe this ${_portfolioItemLabel.toLowerCase()}',
+          ),
         ),
         actions: [
           TextButton(
@@ -371,7 +481,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Design added to portfolio')),
+        SnackBar(content: Text('$_portfolioItemLabel added to portfolio')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -505,17 +615,13 @@ class _CustomerProfileState extends State<CustomerProfile> {
                       children: [
                         // Content section based on user role
                         Text(
-                          _userRole.toLowerCase().contains('tailor') ||
-                                  _userRole.toLowerCase().contains('seamstress')
-                              ? "Business Portfolio"
-                              : "My Posts",
+                          _isProfessionalRole ? _portfolioTitle : "My Posts",
                           style: AppTextStyles.h4,
                         ),
                         const SizedBox(height: 16),
 
                         // Show different content based on role
-                        if (_userRole.toLowerCase().contains('tailor') ||
-                            _userRole.toLowerCase().contains('seamstress'))
+                        if (_isProfessionalRole)
                           _buildBusinessPortfolioSection()
                         else
                           _buildMyPostsSection(),
@@ -581,6 +687,17 @@ class _CustomerProfileState extends State<CustomerProfile> {
                             "Manage your preferences",
                             onTap: () {},
                           ),
+                          if (_isProfessionalRole) ...[
+                            const SizedBox(height: 12),
+                            _buildSettingsTile(
+                              Icons.business_center_outlined,
+                              _businessSectionTitle,
+                              (_businessName ?? '').trim().isEmpty
+                                  ? 'Add your shop/business details'
+                                  : (_businessName ?? ''),
+                              onTap: _showEditBusinessInfoDialog,
+                            ),
+                          ],
                         ],
 
                         const SizedBox(height: 20),
@@ -798,10 +915,8 @@ class _CustomerProfileState extends State<CustomerProfile> {
               ),
               const SizedBox(height: 16),
 
-              // Business Information Section (for tailors/seamstresses)
-              if ((_userRole.toLowerCase().contains('tailor') ||
-                      _userRole.toLowerCase().contains('seamstress')) &&
-                  (_businessName != null || _businessAddress != null))
+              // Business Information Section (for professionals)
+              if (_isProfessionalRole)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -824,12 +939,17 @@ class _CustomerProfileState extends State<CustomerProfile> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Business Information',
+                                _businessSectionTitle,
                                 style: AppTextStyles.h4.copyWith(
                                   color: AppColors.textPrimary,
                                 ),
                               ),
                             ],
+                          ),
+                          TextButton.icon(
+                            onPressed: _showEditBusinessInfoDialog,
+                            icon: const Icon(Icons.edit_outlined, size: 16),
+                            label: const Text('Edit'),
                           ),
                         ],
                       ),
@@ -839,7 +959,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                       if (_businessName != null &&
                           _businessName!.isNotEmpty) ...[
                         Text(
-                          'Business Name',
+                          _isFabricSellerRole ? 'Shop Name' : 'Business Name',
                           style: AppTextStyles.labelSmall.copyWith(
                             color: AppColors.textSecondary,
                           ),
@@ -853,6 +973,17 @@ class _CustomerProfileState extends State<CustomerProfile> {
                         ),
                         const SizedBox(height: 12),
                       ],
+
+                      if ((_businessName ?? '').trim().isEmpty &&
+                          (_businessAddress ?? '').trim().isEmpty &&
+                          (_businessPhone ?? '').trim().isEmpty &&
+                          (_businessEmail ?? '').trim().isEmpty)
+                        Text(
+                          'No ${_isFabricSellerRole ? 'shop' : 'business'} information yet. Tap Edit to add it.',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
 
                       // Business Address
                       if (_businessAddress != null &&
@@ -1900,7 +2031,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
     );
   }
 
-  // Business Portfolio Section for Tailors/Seamstresses
+  // Business/Fabric Portfolio Section for professionals
   Widget _buildBusinessPortfolioSection() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -1912,7 +2043,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
           boxShadow: AppShadows.soft,
         ),
         child: Text(
-          'Please log in to view your business portfolio',
+          'Please log in to view your ${_portfolioTitle.toLowerCase()}',
           style: AppTextStyles.bodyMedium,
           textAlign: TextAlign.center,
         ),
@@ -1932,7 +2063,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
           debugPrint('User Role: $_userRole');
           return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance
-                .collection('tailors')
+                .collection(_isFabricSellerRole ? 'users' : 'tailors')
                 .doc(user.uid)
                 .get(),
             builder: (context, tailorSnap) {
@@ -1956,7 +2087,9 @@ class _CustomerProfileState extends State<CustomerProfile> {
                             : _addPortfolioDesignDirect,
                         icon: const Icon(Icons.add_photo_alternate_outlined),
                         label: Text(
-                          _isAddingPortfolio ? 'Adding...' : 'Add Portfolio',
+                          _isAddingPortfolio
+                              ? 'Adding...'
+                              : 'Add $_portfolioItemLabel',
                           style: AppTextStyles.buttonMedium,
                         ),
                         style: ElevatedButton.styleFrom(
@@ -2060,7 +2193,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
           // Fallback path for older saved images in tailors.profileImageUrls and legacy posts.
           return FutureBuilder<DocumentSnapshot>(
             future: FirebaseFirestore.instance
-                .collection('tailors')
+                .collection(_isFabricSellerRole ? 'users' : 'tailors')
                 .doc(user.uid)
                 .get(),
             builder: (context, tailorSnap) {
@@ -2084,7 +2217,9 @@ class _CustomerProfileState extends State<CustomerProfile> {
                             : _addPortfolioDesignDirect,
                         icon: const Icon(Icons.add_photo_alternate_outlined),
                         label: Text(
-                          _isAddingPortfolio ? 'Adding...' : 'Add Portfolio',
+                          _isAddingPortfolio
+                              ? 'Adding...'
+                              : 'Add $_portfolioItemLabel',
                           style: AppTextStyles.buttonMedium,
                         ),
                         style: ElevatedButton.styleFrom(
@@ -2212,7 +2347,9 @@ class _CustomerProfileState extends State<CustomerProfile> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Share your designs and services to attract customers',
+                      _isFabricSellerRole
+                          ? 'Show your fabrics and services to attract customers'
+                          : 'Share your designs and services to attract customers',
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: AppColors.textSecondary,
                       ),
@@ -2234,7 +2371,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                               label: Text(
                                 _isAddingPortfolio
                                     ? 'Adding...'
-                                    : 'Add Portfolio',
+                                    : 'Add $_portfolioItemLabel',
                                 style: AppTextStyles.buttonMedium,
                               ),
                               style: ElevatedButton.styleFrom(
@@ -2270,7 +2407,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                     : _addPortfolioDesignDirect,
                 icon: const Icon(Icons.add_photo_alternate_outlined),
                 label: Text(
-                  _isAddingPortfolio ? 'Adding...' : 'Add Portfolio',
+                  _isAddingPortfolio ? 'Adding...' : 'Add $_portfolioItemLabel',
                   style: AppTextStyles.buttonMedium,
                 ),
                 style: ElevatedButton.styleFrom(
@@ -2295,7 +2432,10 @@ class _CustomerProfileState extends State<CustomerProfile> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildPortfolioStatItem(items.length.toString(), "Designs"),
+                  _buildPortfolioStatItem(
+                    items.length.toString(),
+                    _isFabricSellerRole ? 'Fabrics' : 'Designs',
+                  ),
                   _buildPortfolioStatItem(
                     items
                         .where((p) {
