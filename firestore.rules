@@ -196,6 +196,14 @@ service cloud.firestore {
       }
     }
 
+    // Tailor portfolio collection (image + description items)
+    match /tailor_portfolio/{itemId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.tailorId == request.auth.uid;
+      allow update: if request.auth != null && resource.data.tailorId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.tailorId == request.auth.uid;
+    }
+
     // Default: deny all other access
     match /{document=**} {
       allow read, write: if false;

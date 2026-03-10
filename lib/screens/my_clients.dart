@@ -30,6 +30,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
   late TailorClientService clientService;
   late CustomOrderService orderService;
   List<TailorClient> clients = [];
+  Map<String, int> _clientOrderCounts = {};
   bool isLoading = true;
 
   @override
@@ -45,8 +46,23 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
       final loadedClients = await clientService.getClientsByTailorId(
         widget.tailorId,
       );
+
+      final ordersSnapshot = await FirebaseFirestore.instance
+          .collection('custom_orders')
+          .where('tailorId', isEqualTo: widget.tailorId)
+          .get();
+
+      final Map<String, int> counts = {};
+      for (final doc in ordersSnapshot.docs) {
+        final data = doc.data();
+        final clientId = (data['clientId'] as String?) ?? '';
+        if (clientId.isEmpty) continue;
+        counts[clientId] = (counts[clientId] ?? 0) + 1;
+      }
+
       setState(() {
         clients = loadedClients;
+        _clientOrderCounts = counts;
         isLoading = false;
       });
     } catch (e) {
@@ -77,7 +93,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
           clientName: client.name,
         ),
       ),
-    );
+    ).then((_) => _loadClients());
   }
 
   @override
@@ -127,6 +143,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
               itemBuilder: (context, index) {
                 return ClientCard(
                   client: clients[index],
+                  orderCount: _clientOrderCounts[clients[index].id] ?? 0,
                   onTap: () => _openClientOrders(clients[index]),
                   onDelete: () async {
                     final confirm = await _showDeleteConfirmation();
@@ -182,12 +199,14 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
 
 class ClientCard extends StatelessWidget {
   final TailorClient client;
+  final int orderCount;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
   const ClientCard({
     Key? key,
     required this.client,
+    required this.orderCount,
     required this.onTap,
     required this.onDelete,
   }) : super(key: key);
@@ -275,12 +294,27 @@ class ClientCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    'Tap to view orders',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary.withOpacity(0.7),
-                    ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        'Orders: $orderCount',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary.withOpacity(0.8),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if ((client.phone ?? '').isNotEmpty)
+                        Text(
+                          client.phone!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary.withOpacity(0.7),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -329,6 +363,8 @@ class _AddClientFormState extends State<AddClientForm> {
 
   // Form Controllers
   final _clientNameController = TextEditingController();
+  final _clientPhoneController = TextEditingController();
+  final _clientEmailController = TextEditingController();
   final _styleController = TextEditingController();
   final _priceController = TextEditingController();
 
@@ -360,6 +396,8 @@ class _AddClientFormState extends State<AddClientForm> {
   @override
   void dispose() {
     _clientNameController.dispose();
+    _clientPhoneController.dispose();
+    _clientEmailController.dispose();
     _styleController.dispose();
     _priceController.dispose();
     for (var controller in _measurementControllers.values) {
@@ -584,11 +622,13 @@ class _AddClientFormState extends State<AddClientForm> {
         id: '',
         tailorId: widget.tailorId,
         name: _clientNameController.text.trim(),
+        phone: _clientPhoneController.text.trim(),
+        email: _clientEmailController.text.trim(),
         profileImageUrl: null,
         createdAt: DateTime.now(),
       );
 
-      final clientId = await clientService.createClient(client);
+      final clientId = await clientService.createOrGetClientForOrder(client);
 
       // Determine style image URL
       String? styleImageUrl;
@@ -686,6 +726,30 @@ class _AddClientFormState extends State<AddClientForm> {
                       ),
                     ),
                     onChanged: (value) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _clientPhoneController,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Client Phone (recommended)',
+                      hintText: 'e.g., 0241234567',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _clientEmailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Client Email (optional)',
+                      hintText: 'e.g., client@email.com',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   // Order Details

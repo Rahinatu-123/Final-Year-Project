@@ -7,7 +7,7 @@ import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/landing_page.dart';
 import 'screens/home.dart'; // Universal feed home for customers
-import 'screens/fabric_seller_home.dart';
+import 'screens/user_profile_view.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'services/remote_config_service.dart';
@@ -51,6 +51,18 @@ class MyApp extends StatelessWidget {
       title: 'FashionHub',
       debugShowCheckedModeBanner: false,
       theme: appTheme(),
+      onGenerateRoute: (settings) {
+        if (settings.name == '/profile') {
+          final arg = settings.arguments;
+          if (arg is String && arg.isNotEmpty) {
+            return MaterialPageRoute(
+              builder: (_) => UserProfilePage(uid: arg),
+              settings: settings,
+            );
+          }
+        }
+        return null;
+      },
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
@@ -89,13 +101,6 @@ class MyApp extends StatelessWidget {
                     userSnap.data!.exists) {
                   final data = userSnap.data!.data() as Map<String, dynamic>?;
                   debugPrint('userDoc data for $uid: ${data.toString()}');
-                  final role = (data?['role'] ?? 'customer')
-                      .toString()
-                      .toLowerCase();
-                  if (role.contains('seller') || role.contains('fabric')) {
-                    debugPrint('Navigating to FabricSellerHome for $uid');
-                    return const FabricSellerHome();
-                  }
                 }
 
                 debugPrint('Navigating to UniversalHome for $uid');

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import '../models/order.dart';
 import '../models/shop_order.dart';
 import '../models/custom_order.dart';
@@ -26,12 +26,14 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
   late OrderService orderService;
   late ShopOrderService shopOrderService;
   late CustomOrderService customOrderService;
-  String? tallorName;
+  String? tailorName;
 
   @override
   void initState() {
     super.initState();
     orderService = OrderService();
+    customOrderService = CustomOrderService();
+    shopOrderService = ShopOrderService();
     _loadTailorName();
   }
 
@@ -237,58 +239,102 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        FutureBuilder<Map<String, dynamic>>(
-          future: _fetchAnalyticsData(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('custom_orders')
+              .where('tailorId', isEqualTo: widget.tailorId)
+              .snapshots(),
+          builder: (context, customSnapshot) {
+            if (!customSnapshot.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
 
-            final data =
-                snapshot.data ??
-                {
-                  'totalOrders': 0,
-                  'completedOrders': 0,
-                  'pendingOrders': 0,
-                  'completionRate': 0.0,
-                  'avgDaysToComplete': 0.0,
-                };
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('shop_orders')
+                  .where('tailorId', isEqualTo: widget.tailorId)
+                  .snapshots(),
+              builder: (context, shopSnapshot) {
+                if (!shopSnapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-            return GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 1.3,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              children: [
-                _buildStatCard(
-                  title: 'Total Orders',
-                  value: '${data['totalOrders']}',
-                  icon: Icons.shopping_bag_outlined,
-                  color: AppColors.primary,
-                ),
-                _buildStatCard(
-                  title: 'Completed',
-                  value: '${data['completedOrders']}',
-                  icon: Icons.check_circle_outline,
-                  color: const Color(0xFF2D6A4F),
-                ),
-                _buildStatCard(
-                  title: 'Completion Rate',
-                  value:
-                      '${(data['completionRate'] as double).toStringAsFixed(0)}%',
-                  icon: Icons.trending_up_outlined,
-                  color: const Color(0xFF1E88E5),
-                ),
-                _buildStatCard(
-                  title: 'Avg Days',
-                  value:
-                      '${(data['avgDaysToComplete'] as double).toStringAsFixed(1)}',
-                  icon: Icons.schedule_outlined,
-                  color: const Color(0xFFFFA500),
-                ),
-              ],
+                final customOrders = customSnapshot.data!.docs
+                    .map(
+                      (doc) => CustomOrder.fromMap(
+                        doc.data() as Map<String, dynamic>,
+                        doc.id,
+                      ),
+                    )
+                    .toList();
+
+                final shopOrders = shopSnapshot.data!.docs
+                    .map(
+                      (doc) => ShopOrder.fromMap(
+                        doc.data() as Map<String, dynamic>,
+                        doc.id,
+                      ),
+                    )
+                    .toList();
+
+                int totalOrders = customOrders.length + shopOrders.length;
+                int completedOrders = 0;
+                int pendingOrders = 0;
+                double totalIncome = 0.0;
+
+                for (final order in customOrders) {
+                  if (order.status == CustomOrderStatus.delivered) {
+                    completedOrders++;
+                    totalIncome += order.basePrice;
+                  } else if (order.status == CustomOrderStatus.active) {
+                    pendingOrders++;
+                  }
+                }
+
+                for (final order in shopOrders) {
+                  if (order.status == ShopOrderStatus.completed) {
+                    completedOrders++;
+                    totalIncome += order.getTotalPrice();
+                  } else if (order.status != ShopOrderStatus.cancelled) {
+                    pendingOrders++;
+                  }
+                }
+
+                return GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: 1.3,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  children: [
+                    _buildStatCard(
+                      title: 'Total Orders',
+                      value: '$totalOrders',
+                      icon: Icons.shopping_bag_outlined,
+                      color: AppColors.primary,
+                    ),
+                    _buildStatCard(
+                      title: 'Completed',
+                      value: '$completedOrders',
+                      icon: Icons.check_circle_outline,
+                      color: const Color(0xFF2D6A4F),
+                    ),
+                    _buildStatCard(
+                      title: 'Pending',
+                      value: '$pendingOrders',
+                      icon: Icons.pending_actions_outlined,
+                      color: const Color(0xFF1E88E5),
+                    ),
+                    _buildStatCard(
+                      title: 'Total Income',
+                      value: 'GHc ${totalIncome.toStringAsFixed(2)}',
+                      icon: Icons.payments_outlined,
+                      color: const Color(0xFFFFA500),
+                    ),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -298,42 +344,41 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
 
   Future<Map<String, dynamic>> _fetchAnalyticsData() async {
     try {
-      final orders = await orderService.getAllOrdersForTailor(widget.tailorId);
+      final customOrders = await customOrderService.getCustomOrdersByTailorId(
+        widget.tailorId,
+      );
+      final shopOrders = await shopOrderService.getTailorOrders(
+        widget.tailorId,
+      );
 
-      int totalOrders = orders.length;
+      int totalOrders = customOrders.length + shopOrders.length;
       int completedOrders = 0;
       int pendingOrders = 0;
-      double avgDaysToComplete = 0.0;
+      double totalIncome = 0.0;
 
-      for (var order in orders) {
-        if (order.status == OrderStatus.completed) {
+      for (var order in customOrders) {
+        if (order.status == CustomOrderStatus.delivered) {
           completedOrders++;
-          if (order.completedAt != null) {
-            final days = order.completedAt!
-                .difference(order.createdAt)
-                .inDays
-                .toDouble();
-            avgDaysToComplete += days;
-          }
-        } else {
+          totalIncome += order.basePrice;
+        } else if (order.status == CustomOrderStatus.active) {
           pendingOrders++;
         }
       }
 
-      if (completedOrders > 0) {
-        avgDaysToComplete = avgDaysToComplete / completedOrders;
+      for (final order in shopOrders) {
+        if (order.status == ShopOrderStatus.completed) {
+          completedOrders++;
+          totalIncome += order.getTotalPrice();
+        } else if (order.status != ShopOrderStatus.cancelled) {
+          pendingOrders++;
+        }
       }
-
-      double completionRate = totalOrders > 0
-          ? (completedOrders / totalOrders) * 100
-          : 0.0;
 
       return {
         'totalOrders': totalOrders,
         'completedOrders': completedOrders,
         'pendingOrders': pendingOrders,
-        'completionRate': completionRate,
-        'avgDaysToComplete': avgDaysToComplete,
+        'totalIncome': totalIncome,
       };
     } catch (e) {
       print('Error fetching analytics: $e');
@@ -341,8 +386,7 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
         'totalOrders': 0,
         'completedOrders': 0,
         'pendingOrders': 0,
-        'completionRate': 0.0,
-        'avgDaysToComplete': 0.0,
+        'totalIncome': 0.0,
       };
     }
   }
@@ -429,8 +473,8 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
           ],
         ),
         const SizedBox(height: 12),
-        FutureBuilder<List<Order>>(
-          future: orderService.getPendingOrdersForTailor(widget.tailorId),
+        FutureBuilder<List<CustomOrder>>(
+          future: customOrderService.getActiveCustomOrders(widget.tailorId),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
@@ -459,14 +503,7 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
               children: orders.take(5).map((order) {
                 final urgencyColor = _getUrgencyColor(order);
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => OrderDetailsScreen(order: order),
-                      ),
-                    );
-                  },
+                  onTap: () {},
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 8),
                     padding: const EdgeInsets.all(12),
@@ -501,15 +538,15 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
                             ],
                           ),
                         ),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: (order.daysRemaining() / order.daysEstimate)
-                                .clamp(0.0, 1.0),
-                            minHeight: 4,
-                            backgroundColor: urgencyColor.withOpacity(0.1),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              urgencyColor,
+                        SizedBox(
+                          width: 90,
+                          child: Text(
+                            '${order.daysRemaining()} days',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: urgencyColor,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -525,14 +562,16 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
     );
   }
 
-  Color _getUrgencyColor(Order order) {
-    switch (order.getTimelineUrgency()) {
-      case TimelineUrgency.green:
+  Color _getUrgencyColor(CustomOrder order) {
+    switch (order.getDeliveryUrgency()) {
+      case DeliveryUrgency.green:
         return const Color(0xFF2D6A4F);
-      case TimelineUrgency.yellow:
+      case DeliveryUrgency.yellow:
         return const Color(0xFFE8A855);
-      case TimelineUrgency.red:
+      case DeliveryUrgency.red:
         return const Color(0xFFBA1A1A);
     }
+
+    return const Color(0xFFBA1A1A);
   }
 }

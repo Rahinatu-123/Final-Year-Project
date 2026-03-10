@@ -4,6 +4,24 @@ import '../models/shop_order.dart';
 class ShopOrderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  /// Get all shop orders for a tailor (one-time fetch)
+  Future<List<ShopOrder>> getTailorOrders(String tailorId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('shop_orders')
+          .where('tailorId', isEqualTo: tailorId)
+          .get();
+
+      final orders = snapshot.docs
+          .map((doc) => ShopOrder.fromMap(doc.data(), doc.id))
+          .toList();
+      orders.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return orders;
+    } catch (e) {
+      throw Exception('Failed to get tailor shop orders: $e');
+    }
+  }
+
   /// Create a new shop order
   Future<String> createOrder(ShopOrder order) async {
     try {

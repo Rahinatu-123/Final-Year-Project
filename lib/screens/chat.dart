@@ -245,17 +245,15 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
-            var msg = snapshot.data!.docs[index];
-            bool isMe = msg['senderId'] == userId;
+            final msgDoc = snapshot.data!.docs[index];
+            final msgData = msgDoc.data() as Map<String, dynamic>;
+            final senderId = (msgData['senderId'] ?? '').toString();
+            final messageType = (msgData['type'] ?? '').toString();
+            bool isMe = senderId == userId;
 
             // Safely check for style share message
-            bool isStyleShare = false;
-            try {
-              isStyleShare =
-                  msg['type'] == 'style_share' && msg['styleData'] != null;
-            } catch (e) {
-              isStyleShare = false;
-            }
+            final isStyleShare =
+                messageType == 'style_share' && msgData['styleData'] != null;
 
             // Group messages by time
             bool showTimestamp = false;
@@ -266,27 +264,27 @@ class _ChatScreenState extends State<ChatScreen> {
             Widget buildMessage() {
               try {
                 if (isStyleShare) {
-                  final styleData = msg['styleData'] as Map<String, dynamic>?;
+                  final styleData = msgData['styleData'] as Map<String, dynamic>?;
                   if (styleData != null) {
                     return _buildStyleShareBubble(styleData, isMe);
                   }
                 }
 
                 // Check if message is audio
-                final isAudio =
-                    msg['type'] == 'audio' && msg['audioUrl'] != null;
+                final isAudio = messageType == 'audio' && msgData['audioUrl'] != null;
                 if (isAudio) {
                   return _buildAudioBubble(
-                    msg['audioUrl'],
-                    msg['duration'] ?? 0,
+                    msgData['audioUrl'].toString(),
+                    (msgData['duration'] as num?)?.toInt() ?? 0,
                     isMe,
                   );
                 }
 
-                return _buildMessageBubble(
-                  msg['text'] ?? 'Sent a message',
-                  isMe,
-                );
+                final text =
+                    (msgData['text'] ?? msgData['message'] ?? 'Sent a message')
+                        .toString();
+
+                return _buildMessageBubble(text, isMe);
               } catch (e) {
                 debugPrint('Message build error: $e');
                 return _buildMessageBubble('Error loading message', isMe);

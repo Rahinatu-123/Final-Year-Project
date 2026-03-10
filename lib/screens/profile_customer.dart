@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:fashionhub/screens/business_profile_new.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -9,6 +8,8 @@ import 'dart:convert';
 import '../theme/app_theme.dart';
 import 'landing_page.dart';
 import 'create_post_screen.dart';
+import '../services/profile_service.dart';
+import '../services/cloudinary_service.dart';
 
 class CustomerProfile extends StatefulWidget {
   const CustomerProfile({super.key});
@@ -27,6 +28,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
   String _userRole = "Member";
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _isAddingPortfolio = false;
   bool _showAccountSettings = false;
 
   // Business profile data for tailors/seamstresses
@@ -42,8 +44,6 @@ class _CustomerProfileState extends State<CustomerProfile> {
     super.initState();
     _loadUserData();
   }
-
-  // ================= FOLLOW/UNFOLLOW METHODS =================
 
   Stream<int> followersCount() {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -87,7 +87,6 @@ class _CustomerProfileState extends State<CustomerProfile> {
             _displayName = data['username'] ?? data['fullName'] ?? "User";
             _userRole = data['role'] ?? "Member";
 
-            // Load business profile data for tailors/seamstresses
             if (_userRole.toLowerCase().contains('tailor') ||
                 _userRole.toLowerCase().contains('seamstress')) {
               _businessName = data['businessName'];
@@ -98,7 +97,6 @@ class _CustomerProfileState extends State<CustomerProfile> {
               _businessLongitude = data['businessLongitude']?.toDouble();
             }
 
-            // Try to get profile picture from Cloudinary first, then fall back to Auth
             _photoUrl = data['profilePictureUrl'] ?? user.photoURL;
             _isLoading = false;
           });
@@ -301,6 +299,88 @@ class _CustomerProfileState extends State<CustomerProfile> {
             ),
           ),
         );
+      }
+    }
+  }
+
+  Future<String?> _promptPortfolioDescription() async {
+    final controller = TextEditingController();
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Design Description'),
+        content: TextField(
+          controller: controller,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'Describe this design'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('Description is required')),
+                );
+                return;
+              }
+              Navigator.pop(dialogContext, text);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addPortfolioDesignDirect() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      final description = await _promptPortfolioDescription();
+      if (description == null) return;
+
+      setState(() => _isAddingPortfolio = true);
+
+      final cloudinaryService = CloudinaryService();
+      final uploadedUrl = await cloudinaryService.uploadImage(
+        File(picked.path),
+      );
+      if (uploadedUrl == null || uploadedUrl.isEmpty) {
+        throw Exception('Image upload failed. Please try again.');
+      }
+
+      await ProfileService().addPortfolioItem(
+        uid: user.uid,
+        imageUrl: uploadedUrl,
+        description: description,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Design added to portfolio')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to add design: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isAddingPortfolio = false);
       }
     }
   }
@@ -1841,8 +1921,8 @@ class _CustomerProfileState extends State<CustomerProfile> {
 
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('posts')
-          .where('userId', isEqualTo: user.uid)
+          .collection('tailor_portfolio')
+          .where('tailorId', isEqualTo: user.uid)
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
@@ -1850,33 +1930,109 @@ class _CustomerProfileState extends State<CustomerProfile> {
           debugPrint('Error loading portfolio: $error');
           debugPrint('User UID: ${user.uid}');
           debugPrint('User Role: $_userRole');
-          return Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
-              boxShadow: AppShadows.soft,
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.error_outline, size: 48, color: AppColors.error),
-                const SizedBox(height: 12),
-                Text(
-                  'Error loading portfolio',
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('tailors')
+                .doc(user.uid)
+                .get(),
+            builder: (context, tailorSnap) {
+              final tailorData =
+                  tailorSnap.data?.data() as Map<String, dynamic>?;
+              final legacyUrls =
+                  (tailorData?['portfolioImageUrls'] as List<dynamic>? ?? [])
+                      .map((e) => e.toString())
+                      .where((e) => e.isNotEmpty)
+                      .toList();
+
+              if (legacyUrls.isNotEmpty) {
+                return Column(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ElevatedButton.icon(
+                        onPressed: _isAddingPortfolio
+                            ? null
+                            : _addPortfolioDesignDirect,
+                        icon: const Icon(Icons.add_photo_alternate_outlined),
+                        label: Text(
+                          _isAddingPortfolio ? 'Adding...' : 'Add Portfolio',
+                          style: AppTextStyles.buttonMedium,
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.md,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                      ),
+                      child: Text(
+                        'Using previously saved portfolio images while permissions sync.',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.8,
+                          ),
+                      itemCount: legacyUrls.length,
+                      itemBuilder: (context, index) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.lg,
+                          ),
+                          child: Image.network(
+                            legacyUrls[index],
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              color: AppColors.surfaceVariant,
+                              child: const Icon(Icons.image_not_supported),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              }
+
+              return Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                  boxShadow: AppShadows.soft,
+                ),
+                child: Text(
+                  'Error loading portfolio. Try again after rules deploy.',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.error,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Error: $error',
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
                   textAlign: TextAlign.center,
                 ),
-              ],
-            ),
+              );
+            },
           );
         }
 
@@ -1888,81 +2044,245 @@ class _CustomerProfileState extends State<CustomerProfile> {
         }
 
         debugPrint('Portfolio connection state: ${snapshot.connectionState}');
-        final posts = snapshot.data?.docs ?? [];
-        debugPrint('Posts count: ${posts.length}');
+        final items = [...(snapshot.data?.docs ?? [])]
+          ..sort((a, b) {
+            final aTs =
+                (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            final bTs =
+                (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            final aMs = aTs?.millisecondsSinceEpoch ?? 0;
+            final bMs = bTs?.millisecondsSinceEpoch ?? 0;
+            return bMs.compareTo(aMs);
+          });
+        debugPrint('Portfolio items count: ${items.length}');
 
-        if (posts.isEmpty) {
-          debugPrint('No posts found for user: ${user.uid}');
-          return Container(
-            padding: const EdgeInsets.all(40),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppBorderRadius.lg),
-              boxShadow: AppShadows.soft,
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.style_outlined, size: 64, color: AppColors.primary),
-                const SizedBox(height: 16),
-                Text(
-                  'Showcase Your Business',
-                  style: AppTextStyles.h3.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Share your designs and services to attract customers',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Row(
+        if (items.isEmpty) {
+          // Fallback path for older saved images in tailors.profileImageUrls and legacy posts.
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('tailors')
+                .doc(user.uid)
+                .get(),
+            builder: (context, tailorSnap) {
+              final tailorData =
+                  tailorSnap.data?.data() as Map<String, dynamic>?;
+              final legacyUrls =
+                  (tailorData?['portfolioImageUrls'] as List<dynamic>? ?? [])
+                      .map((e) => e.toString())
+                      .where((e) => e.isNotEmpty)
+                      .toList();
+
+              if (legacyUrls.isNotEmpty) {
+                return Column(
                   children: [
-                    // Edit Business Profile Button
-                    Expanded(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton.icon(
-                          onPressed: () {
-                            // Navigate to business profile screen
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const BusinessProfileScreenNew(),
-                              ),
-                            );
-                          },
-                          icon: const Icon(Icons.edit),
-                          label: Text(
-                            'Edit Business',
-                            style: AppTextStyles.buttonMedium,
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.secondary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                AppBorderRadius.md,
-                              ),
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: ElevatedButton.icon(
+                        onPressed: _isAddingPortfolio
+                            ? null
+                            : _addPortfolioDesignDirect,
+                        icon: const Icon(Icons.add_photo_alternate_outlined),
+                        label: Text(
+                          _isAddingPortfolio ? 'Adding...' : 'Add Portfolio',
+                          style: AppTextStyles.buttonMedium,
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.md,
                             ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                      ),
+                      child: Text(
+                        'Showing your previously saved portfolio images.',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            childAspectRatio: 0.8,
+                          ),
+                      itemCount: legacyUrls.length,
+                      itemBuilder: (context, index) {
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.lg,
+                            ),
+                            boxShadow: AppShadows.soft,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.lg,
+                            ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(
+                                  legacyUrls[index],
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: AppColors.surfaceVariant,
+                                    child: const Icon(
+                                      Icons.image_not_supported,
+                                      color: AppColors.textTertiary,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Colors.transparent,
+                                        Colors.black.withOpacity(0.1),
+                                        Colors.black.withOpacity(0.6),
+                                      ],
+                                      stops: const [0.3, 0.6, 1.0],
+                                    ),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Align(
+                                      alignment: Alignment.bottomLeft,
+                                      child: Text(
+                                        'No description',
+                                        style: AppTextStyles.labelSmall
+                                            .copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                );
+              }
+
+              return Container(
+                padding: const EdgeInsets.all(40),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+                  boxShadow: AppShadows.soft,
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.style_outlined,
+                      size: 64,
+                      color: AppColors.primary,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Showcase Your Business',
+                      style: AppTextStyles.h3.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Share your designs and services to attract customers',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: ElevatedButton.icon(
+                              onPressed: _isAddingPortfolio
+                                  ? null
+                                  : _addPortfolioDesignDirect,
+                              icon: const Icon(
+                                Icons.add_photo_alternate_outlined,
+                              ),
+                              label: Text(
+                                _isAddingPortfolio
+                                    ? 'Adding...'
+                                    : 'Add Portfolio',
+                                style: AppTextStyles.buttonMedium,
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.secondary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppBorderRadius.md,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         }
 
         return Column(
           children: [
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ElevatedButton.icon(
+                onPressed: _isAddingPortfolio
+                    ? null
+                    : _addPortfolioDesignDirect,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text(
+                  _isAddingPortfolio ? 'Adding...' : 'Add Portfolio',
+                  style: AppTextStyles.buttonMedium,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                  ),
+                ),
+              ),
+            ),
             // Portfolio Stats
             Container(
               padding: const EdgeInsets.all(20),
@@ -1975,16 +2295,17 @@ class _CustomerProfileState extends State<CustomerProfile> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildPortfolioStatItem(posts.length.toString(), "Designs"),
+                  _buildPortfolioStatItem(items.length.toString(), "Designs"),
                   _buildPortfolioStatItem(
-                    posts
+                    items
                         .where((p) {
-                          final likesList = p['likes'] as List?;
-                          return likesList != null && likesList.isNotEmpty;
+                          final data = p.data() as Map<String, dynamic>;
+                          final d = (data['description'] ?? '').toString();
+                          return d.trim().isNotEmpty;
                         })
                         .length
                         .toString(),
-                    "Popular",
+                    "With Notes",
                   ),
                 ],
               ),
@@ -2000,11 +2321,11 @@ class _CustomerProfileState extends State<CustomerProfile> {
                 mainAxisSpacing: 16,
                 childAspectRatio: 0.8,
               ),
-              itemCount: posts.length,
+              itemCount: items.length,
               itemBuilder: (context, index) {
-                final post = posts[index].data() as Map<String, dynamic>;
-                final mediaUrls = post['mediaUrls'] as List? ?? [];
-                final likes = (post['likes'] as List?)?.length ?? 0;
+                final item = items[index].data() as Map<String, dynamic>;
+                final imageUrl = (item['imageUrl'] ?? '').toString();
+                final description = (item['description'] ?? '').toString();
 
                 return Container(
                   decoration: BoxDecoration(
@@ -2017,10 +2338,10 @@ class _CustomerProfileState extends State<CustomerProfile> {
                       fit: StackFit.expand,
                       children: [
                         // Media
-                        if (mediaUrls.isNotEmpty)
+                        if (imageUrl.isNotEmpty)
                           Positioned.fill(
                             child: Image.network(
-                              mediaUrls.first,
+                              imageUrl,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Container(
@@ -2042,7 +2363,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                             ),
                           ),
 
-                        // Overlay with likes and type
+                        // Overlay with description
                         Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
@@ -2062,45 +2383,16 @@ class _CustomerProfileState extends State<CustomerProfile> {
                               mainAxisAlignment: MainAxisAlignment.end,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Post type badge
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
+                                Text(
+                                  description.isEmpty
+                                      ? 'No description'
+                                      : description,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.coral,
-                                    borderRadius: BorderRadius.circular(
-                                      AppBorderRadius.sm,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    post['postType'] == 'video'
-                                        ? 'VIDEO'
-                                        : 'DESIGN',
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                // Likes
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.favorite,
-                                      size: 16,
-                                      color: Colors.white,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      likes.toString(),
-                                      style: AppTextStyles.labelSmall.copyWith(
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ],
                                 ),
                               ],
                             ),

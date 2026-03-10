@@ -13,6 +13,7 @@ class UserProfilePage extends StatefulWidget {
 
 class _UserProfilePageState extends State<UserProfilePage> {
   Map<String, dynamic>? _userData;
+  Map<String, dynamic>? _tailorData;
   bool _loading = true;
   bool _isConnected = false;
 
@@ -29,6 +30,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
           .doc(widget.uid)
           .get();
       final data = doc.data() as Map<String, dynamic>?;
+
+      final tailorDoc = await FirebaseFirestore.instance
+          .collection('tailors')
+          .doc(widget.uid)
+          .get();
+      final tailorData = tailorDoc.data() as Map<String, dynamic>?;
+
       // check if current user is connected to this profile
       final current = FirebaseAuth.instance.currentUser;
       bool connected = false;
@@ -44,6 +52,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
       setState(() {
         _userData = data;
+        _tailorData = tailorData;
         _isConnected = connected;
         _loading = false;
       });
@@ -158,63 +167,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 8),
-                              StreamBuilder<DocumentSnapshot>(
-                                stream: FirebaseFirestore.instance
-                                    .collection('users')
-                                    .doc(widget.uid)
-                                    .snapshots(),
-                                builder: (context, userSnap) {
-                                  int followers = 0;
-                                  int following = 0;
-                                  if (userSnap.hasData &&
-                                      userSnap.data != null) {
-                                    final data =
-                                        userSnap.data!.data()
-                                            as Map<String, dynamic>?;
-                                    if (data != null) {
-                                      followers =
-                                          (data['followersCount'] is int)
-                                          ? data['followersCount'] as int
-                                          : (data['followers'] is List)
-                                          ? (data['followers'] as List).length
-                                          : 0;
-                                      following =
-                                          (data['followingCount'] is int)
-                                          ? data['followingCount'] as int
-                                          : (data['following'] is List)
-                                          ? (data['following'] as List).length
-                                          : 0;
-                                    }
-                                  }
-
-                                  return SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    child: Row(
-                                      children: [
-                                        Text(
-                                          followers.toString(),
-                                          style: AppTextStyles.bodyLarge
-                                              .copyWith(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Text('Followers'),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          following.toString(),
-                                          style: AppTextStyles.bodyLarge
-                                              .copyWith(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        const Text('Following'),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
+                              _buildConnectionCounts(),
                             ],
                           ),
                         ),
@@ -238,6 +191,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 20),
+                    _buildBusinessInfoSection(),
                     const SizedBox(height: 20),
                     const Divider(),
                     const SizedBox(height: 12),
@@ -334,6 +289,131 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildConnectionCounts() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.uid)
+          .collection('followers')
+          .snapshots(),
+      builder: (context, followersSnap) {
+        final followers = followersSnap.data?.size ?? 0;
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.uid)
+              .collection('connections')
+              .snapshots(),
+          builder: (context, followingSnap) {
+            final following = followingSnap.data?.size ?? 0;
+
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  Text(
+                    followers.toString(),
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('Followers'),
+                  const SizedBox(width: 12),
+                  Text(
+                    following.toString(),
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Text('Following'),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildBusinessInfoSection() {
+    final role = (_userData?['role'] ?? '').toString().toLowerCase();
+    final isProfessional =
+        role.contains('tailor') ||
+        role.contains('seamstress') ||
+        role.contains('fabric') ||
+        role.contains('seller');
+
+    final businessName =
+        (_tailorData?['businessName'] ?? _userData?['businessName'] ?? '')
+            .toString();
+    final businessDescription =
+        (_tailorData?['businessDescription'] ??
+                _userData?['businessDescription'] ??
+                _userData?['description'] ??
+                _tailorData?['bio'] ??
+                _userData?['bio'] ??
+                '')
+            .toString();
+    final businessAddress =
+        (_tailorData?['location'] ?? _userData?['businessAddress'] ?? '')
+            .toString();
+    final businessPhone =
+        (_tailorData?['phoneNumber'] ?? _userData?['businessPhone'] ?? '')
+            .toString();
+    final businessEmail =
+        (_tailorData?['email'] ?? _userData?['businessEmail'] ?? '').toString();
+
+    final hasInfo =
+        businessName.isNotEmpty ||
+        businessDescription.isNotEmpty ||
+        businessAddress.isNotEmpty ||
+        businessPhone.isNotEmpty ||
+        businessEmail.isNotEmpty;
+
+    if (!isProfessional && !hasInfo) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.surfaceVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Business Information', style: AppTextStyles.h4),
+          const SizedBox(height: 8),
+          if (businessName.isNotEmpty)
+            Text(
+              businessName,
+              style: AppTextStyles.bodyLarge.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          if (businessDescription.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(businessDescription, style: AppTextStyles.bodyMedium),
+          ],
+          if (businessAddress.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text('Location: $businessAddress', style: AppTextStyles.bodySmall),
+          ],
+          if (businessPhone.isNotEmpty)
+            Text('Phone: $businessPhone', style: AppTextStyles.bodySmall),
+          if (businessEmail.isNotEmpty)
+            Text('Email: $businessEmail', style: AppTextStyles.bodySmall),
+        ],
+      ),
     );
   }
 }

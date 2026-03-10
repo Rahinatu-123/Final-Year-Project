@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../services/profile_service.dart';
 
 class CreatePostScreen extends StatefulWidget {
   const CreatePostScreen({super.key});
@@ -202,6 +203,20 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         'sharedFabricId': '',
       });
 
+      final isTailorOrSeamstress =
+          _userRole.toLowerCase().contains('tailor') ||
+          _userRole.toLowerCase().contains('seamstress');
+      if (isTailorOrSeamstress) {
+        final portfolioUrls = mediaUrls.where(_isLikelyImageUrl).toList();
+        if (portfolioUrls.isNotEmpty) {
+          await ProfileService().addPortfolioItems(
+            uid: user.uid,
+            imageUrls: portfolioUrls,
+            description: _captionController.text.trim(),
+          );
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -327,6 +342,15 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     final isVideo = videoExtensions.contains(extension);
     debugPrint('File path: $path, Extension: $extension, Is Video: $isVideo');
     return isVideo;
+  }
+
+  bool _isLikelyImageUrl(String url) {
+    final lower = url.toLowerCase();
+    return lower.contains('/image/upload/') ||
+        lower.endsWith('.jpg') ||
+        lower.endsWith('.jpeg') ||
+        lower.endsWith('.png') ||
+        lower.endsWith('.webp');
   }
 
   @override
@@ -750,6 +774,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       _buildTagChip("+ Add", isAdd: true),
                     ],
                   ),
+                  const SizedBox(height: 18),
                 ],
               ),
             ),

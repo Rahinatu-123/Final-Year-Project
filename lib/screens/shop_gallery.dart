@@ -197,17 +197,35 @@ class _ShopGalleryPageState extends State<ShopGalleryPage> {
           );
         }
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.75,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: displayProducts.length,
-          itemBuilder: (context, index) {
-            return _buildProductCard(displayProducts[index]);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            const horizontalPadding = 32.0;
+            const spacing = 12.0;
+            final itemWidth =
+                (constraints.maxWidth - horizontalPadding - spacing) / 2;
+            final textScale = MediaQuery.textScalerOf(
+              context,
+            ).scale(1.0).clamp(1.0, 1.35);
+
+            // Make cards slightly taller on small screens / larger text scales
+            // to avoid tiny bottom overflows in the product info column.
+            final estimatedItemHeight = 250.0 + ((textScale - 1.0) * 28.0);
+            final adaptiveRatio =
+                (itemWidth / estimatedItemHeight).clamp(0.62, 0.74).toDouble();
+
+            return GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: adaptiveRatio,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              itemCount: displayProducts.length,
+              itemBuilder: (context, index) {
+                return _buildProductCard(displayProducts[index]);
+              },
+            );
           },
         );
       },

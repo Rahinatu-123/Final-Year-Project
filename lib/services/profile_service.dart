@@ -11,6 +11,7 @@ class ProfileService {
 
   static const String tailorsCollection = 'tailors';
   static const String clientsCollection = 'clients';
+  static const String tailorPortfolioCollection = 'tailor_portfolio';
 
   factory ProfileService() {
     return _instance;
@@ -82,16 +83,86 @@ class ProfileService {
   /// Pass the Cloudinary image URL directly
   Future<void> addPortfolioImage(String uid, String cloudinaryImageUrl) async {
     try {
-      // Add image URL to tailor's portfolio
-      await _firestore.collection(tailorsCollection).doc(uid).update({
+      await _firestore.collection(tailorsCollection).doc(uid).set({
         'portfolioImageUrls': FieldValue.arrayUnion([cloudinaryImageUrl]),
         'updatedAt': Timestamp.now(),
-      });
+      }, SetOptions(merge: true));
 
       // Optionally save reference in CloudinaryService
       // This helps track which images belong to which tailor
     } catch (e) {
       throw Exception('Failed to add portfolio image: $e');
+    }
+  }
+
+  /// Add multiple portfolio image URLs at once.
+  Future<void> addPortfolioImages(String uid, List<String> imageUrls) async {
+    try {
+      if (imageUrls.isEmpty) return;
+
+      await _firestore.collection(tailorsCollection).doc(uid).set({
+        'portfolioImageUrls': FieldValue.arrayUnion(imageUrls),
+        'updatedAt': Timestamp.now(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      throw Exception('Failed to add portfolio images: $e');
+    }
+  }
+
+  /// Add a portfolio item with only image + description.
+  Future<void> addPortfolioItem({
+    required String uid,
+    required String imageUrl,
+    required String description,
+  }) async {
+    try {
+      await _firestore.collection(tailorPortfolioCollection).add({
+        'tailorId': uid,
+        'imageUrl': imageUrl,
+        'description': description.trim(),
+        'createdAt': Timestamp.now(),
+        'updatedAt': Timestamp.now(),
+      });
+    } catch (e) {
+      // Fallback to tailor profile array when collection permissions are not available.
+      final lower = e.toString().toLowerCase();
+      if (lower.contains('permission_denied') ||
+          lower.contains('insufficient permissions')) {
+        await addPortfolioImage(uid, imageUrl);
+        return;
+      }
+      throw Exception('Failed to add portfolio item: $e');
+    }
+  }
+
+  /// Add multiple portfolio items from image URLs with one description.
+  Future<void> addPortfolioItems({
+    required String uid,
+    required List<String> imageUrls,
+    required String description,
+  }) async {
+    try {
+      if (imageUrls.isEmpty) return;
+      final batch = _firestore.batch();
+      for (final imageUrl in imageUrls) {
+        final doc = _firestore.collection(tailorPortfolioCollection).doc();
+        batch.set(doc, {
+          'tailorId': uid,
+          'imageUrl': imageUrl,
+          'description': description.trim(),
+          'createdAt': Timestamp.now(),
+          'updatedAt': Timestamp.now(),
+        });
+      }
+      await batch.commit();
+    } catch (e) {
+      final lower = e.toString().toLowerCase();
+      if (lower.contains('permission_denied') ||
+          lower.contains('insufficient permissions')) {
+        await addPortfolioImages(uid, imageUrls);
+        return;
+      }
+      throw Exception('Failed to add portfolio items: $e');
     }
   }
 

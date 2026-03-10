@@ -1,4 +1,5 @@
 import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:flutter/foundation.dart';
 
 /// Remote Configuration Service for FashionHub
 /// Manages dynamic configuration values stored in Firebase Remote Config
@@ -14,6 +15,8 @@ import 'package:firebase_remote_config/firebase_remote_config.dart';
 class RemoteConfigService {
   static final FirebaseRemoteConfig _remoteConfig =
       FirebaseRemoteConfig.instance;
+  static const String _apiUrlKey = 'api_url';
+  static String _cachedApiUrl = '';
 
   /// Initialize Remote Config with defaults and fetch latest values
   static Future<void> initialize() async {
@@ -22,19 +25,25 @@ class RemoteConfigService {
       await _remoteConfig.setConfigSettings(
         RemoteConfigSettings(
           fetchTimeout: const Duration(seconds: 30),
-          minimumFetchInterval: const Duration(minutes: 5),
+          // In debug we allow immediate fetches so Remote Config changes are
+          // visible without waiting for cache interval.
+          minimumFetchInterval: kDebugMode
+              ? Duration.zero
+              : const Duration(minutes: 30),
         ),
       );
 
       // Set default values (fallback if Firebase unavailable)
       await _remoteConfig.setDefaults({
-        'api_url': 'https://unexcepted-coaly-candie.ngrok-free.dev',
+        // Keep empty by default so API URL comes from Firebase Remote Config.
+        _apiUrlKey: '',
         'tryon_enabled': true,
         'tryon_timeout_seconds': 120,
       });
 
       // Fetch and activate latest config from Firebase
       await _remoteConfig.fetchAndActivate();
+      _cachedApiUrl = _readApiUrl();
 
       print('✅ Remote Config initialized successfully');
       print('📡 API URL: ${getApiUrl()}');
@@ -45,13 +54,24 @@ class RemoteConfigService {
   }
 
   /// Get the Try-On API URL from Remote Config
-  /// Returns the ngrok tunnel URL or fallback URL if unavailable
+  /// Returns the Remote Config value. Empty means it is not configured yet.
   static String getApiUrl() {
     try {
-      return _remoteConfig.getString('api_url');
+      if (_cachedApiUrl.isNotEmpty) {
+        return _cachedApiUrl;
+      }
+
+      _cachedApiUrl = _readApiUrl();
+      return _cachedApiUrl;
     } catch (e) {
-      return 'https://unexcepted-coaly-candie.ngrok-free.dev';
+      return '';
     }
+  }
+
+  /// Force-refresh and return latest API URL from Firebase.
+  static Future<String> fetchLatestApiUrl() async {
+    await refresh();
+    return getApiUrl();
   }
 
   /// Check if Try-On feature is enabled
@@ -78,10 +98,19 @@ class RemoteConfigService {
   static Future<void> refresh() async {
     try {
       await _remoteConfig.fetchAndActivate();
+      _cachedApiUrl = _readApiUrl();
       print('✅ Remote Config refreshed');
     } catch (e) {
       print('⚠️ Failed to refresh Remote Config: $e');
     }
+  }
+
+  static String _readApiUrl() {
+    final rawValue = _remoteConfig.getString(_apiUrlKey).trim();
+    if (rawValue.endsWith('/')) {
+      return rawValue.substring(0, rawValue.length - 1);
+    }
+    return rawValue;
   }
 
   /// Get all config values for debugging

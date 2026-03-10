@@ -9,6 +9,10 @@ import 'profile_customer.dart';
 import 'explore.dart';
 import 'tailor_dashboard.dart' as tailor_dashboard;
 import 'fabric_seller_dashboard.dart';
+import 'fabric_seller_inventory.dart';
+import 'fabric_seller_orders.dart';
+import 'fabric_seller_shop_profile.dart';
+import 'add_fabric_listing.dart';
 import 'package:video_player/video_player.dart';
 
 class UniversalHome extends StatefulWidget {
@@ -106,7 +110,14 @@ class _UniversalHomeState extends State<UniversalHome> {
 
   @override
   Widget build(BuildContext context) {
-    final showLogout = _role == 'fabric_seller';
+    final isFabricSeller = _role.contains('fabric') || _role.contains('seller');
+    final showLogout = isFabricSeller;
+    final tabPages = _buildTabPages(isFabricSeller: isFabricSeller);
+
+    if (_currentIndex >= tabPages.length) {
+      _currentIndex = 0;
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: _currentIndex == 0 ? _buildAppBar() : null,
@@ -127,21 +138,36 @@ class _UniversalHomeState extends State<UniversalHome> {
               ),
             ),
           Expanded(
-            child: IndexedStack(
-              index: _currentIndex,
-              children: [
-                const HomeFeedPage(),
-                const ExplorePage(),
-                _buildDashboard(),
-                const CustomerProfile(),
-              ],
-            ),
+            child: IndexedStack(index: _currentIndex, children: tabPages),
           ),
         ],
       ),
-      floatingActionButton: _currentIndex == 0 ? _buildFAB() : null,
-      bottomNavigationBar: _buildBottomNav(),
+      floatingActionButton: _currentIndex == 0
+          ? _buildFAB(isFabricSeller: isFabricSeller)
+          : null,
+      bottomNavigationBar: _buildBottomNav(isFabricSeller: isFabricSeller),
     );
+  }
+
+  List<Widget> _buildTabPages({required bool isFabricSeller}) {
+    final sellerId = _uid ?? '';
+
+    if (isFabricSeller) {
+      return [
+        const HomeFeedPage(),
+        FabricSellerInventory(sellerId: sellerId),
+        FabricSellerOrders(sellerId: sellerId),
+        FabricSellerDashboard(sellerId: sellerId),
+        FabricSellerShopProfile(sellerId: sellerId),
+      ];
+    }
+
+    return [
+      const HomeFeedPage(),
+      const ExplorePage(),
+      _buildDashboard(),
+      const CustomerProfile(),
+    ];
   }
 
   Widget _buildDashboard() {
@@ -338,7 +364,7 @@ class _UniversalHomeState extends State<UniversalHome> {
     );
   }
 
-  Widget _buildFAB() {
+  Widget _buildFAB({required bool isFabricSeller}) {
     return Container(
       decoration: BoxDecoration(
         gradient: AppColors.warmGradient,
@@ -350,6 +376,11 @@ class _UniversalHomeState extends State<UniversalHome> {
         elevation: 0,
         child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
         onPressed: () {
+          if (isFabricSeller && _uid != null) {
+            _showSellerQuickActions();
+            return;
+          }
+
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const CreatePostScreen()),
@@ -359,7 +390,116 @@ class _UniversalHomeState extends State<UniversalHome> {
     );
   }
 
-  Widget _buildBottomNav() {
+  void _showSellerQuickActions() {
+    final sellerId = _uid;
+    if (sellerId == null || sellerId.isEmpty) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.post_add_rounded),
+                title: const Text('Create Post'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    this.context,
+                    MaterialPageRoute(
+                      builder: (context) => const CreatePostScreen(),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.add_box_rounded),
+                title: const Text('Add Fabric Listing'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    this.context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          AddFabricListing(sellerId: sellerId),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_rounded),
+                title: const Text('Open Inventory'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    this.context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          FabricSellerInventory(sellerId: sellerId),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.receipt_long_rounded),
+                title: const Text('Open Orders'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    this.context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          FabricSellerOrders(sellerId: sellerId),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.store_rounded),
+                title: const Text('Shop Profile'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    this.context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          FabricSellerShopProfile(sellerId: sellerId),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBottomNav({required bool isFabricSeller}) {
+    final navItems = isFabricSeller
+        ? [
+            (Icons.home_rounded, Icons.home_outlined, 'Feed'),
+            (
+              Icons.inventory_2_rounded,
+              Icons.inventory_2_outlined,
+              'Inventory',
+            ),
+            (Icons.receipt_long_rounded, Icons.receipt_long_outlined, 'Orders'),
+            (Icons.grid_view_rounded, Icons.grid_view_outlined, 'Dashboard'),
+            (Icons.store_rounded, Icons.store_outlined, 'Shop'),
+          ]
+        : [
+            (Icons.home_rounded, Icons.home_outlined, 'Feed'),
+            (Icons.explore_rounded, Icons.explore_outlined, 'Explore'),
+            (Icons.grid_view_rounded, Icons.grid_view_outlined, 'Dashboard'),
+            (Icons.person_rounded, Icons.person_outline, 'Profile'),
+          ];
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -376,27 +516,10 @@ class _UniversalHomeState extends State<UniversalHome> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(0, Icons.home_rounded, Icons.home_outlined, "Feed"),
-              _buildNavItem(
-                1,
-                Icons.explore_rounded,
-                Icons.explore_outlined,
-                "Explore",
-              ),
-              _buildNavItem(
-                2,
-                Icons.grid_view_rounded,
-                Icons.grid_view_outlined,
-                "Dashboard",
-              ),
-              _buildNavItem(
-                3,
-                Icons.person_rounded,
-                Icons.person_outline,
-                "Profile",
-              ),
-            ],
+            children: List.generate(navItems.length, (index) {
+              final item = navItems[index];
+              return _buildNavItem(index, item.$1, item.$2, item.$3);
+            }),
           ),
         ),
       ),
@@ -455,6 +578,15 @@ class HomeFeedPage extends StatefulWidget {
 
 class _HomeFeedPageState extends State<HomeFeedPage> {
   late Map<String, int> _carouselIndices;
+  int _selectedCategoryIndex = 0;
+  final List<String> _categories = [
+    "All",
+    "Traditional",
+    "Bridal",
+    "Suits",
+    "Lace",
+    "Casual",
+  ];
 
   void _toggleLike(String postId, List likes) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -646,36 +778,41 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
   }
 
   Widget _buildCategories() {
-    final cats = ["All", "Traditional", "Bridal", "Suits", "Lace", "Casual"];
     return SizedBox(
       height: 42,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        itemCount: cats.length,
-        itemBuilder: (context, index) => Container(
-          margin: const EdgeInsets.only(right: 10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            decoration: BoxDecoration(
-              gradient: index == 0 ? AppColors.warmGradient : null,
-              color: index == 0 ? null : AppColors.surface,
-              borderRadius: BorderRadius.circular(AppBorderRadius.xl),
-              boxShadow: index == 0
-                  ? AppShadows.colored(AppColors.coral)
-                  : AppShadows.soft,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              cats[index],
-              style: AppTextStyles.labelMedium.copyWith(
-                color: index == 0 ? Colors.white : AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
+        itemCount: _categories.length,
+        itemBuilder: (context, index) {
+          final isSelected = _selectedCategoryIndex == index;
+          return GestureDetector(
+            onTap: () => setState(() => _selectedCategoryIndex = index),
+            child: Container(
+              margin: const EdgeInsets.only(right: 10),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  gradient: isSelected ? AppColors.warmGradient : null,
+                  color: isSelected ? null : AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppBorderRadius.xl),
+                  boxShadow: isSelected
+                      ? AppShadows.colored(AppColors.coral)
+                      : AppShadows.soft,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  _categories[index],
+                  style: AppTextStyles.labelMedium.copyWith(
+                    color: isSelected ? Colors.white : AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -705,12 +842,36 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           return _buildEmptyFeed();
         }
 
+        final selectedCategory = _categories[_selectedCategoryIndex];
+        final filteredDocs = snapshot.data!.docs.where((doc) {
+          if (selectedCategory == 'All') return true;
+
+          final data = doc.data() as Map<String, dynamic>;
+          final tags = (data['tags'] as List<dynamic>? ?? [])
+              .map((e) => e.toString().toLowerCase().trim())
+              .toList();
+
+          return tags.contains(selectedCategory.toLowerCase());
+        }).toList();
+
+        if (filteredDocs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'No posts for ${selectedCategory.toLowerCase()} yet.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          );
+        }
+
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: snapshot.data!.docs.length,
+          itemCount: filteredDocs.length,
           itemBuilder: (context, index) {
-            var doc = snapshot.data!.docs[index];
+            var doc = filteredDocs[index];
             var post = doc.data() as Map<String, dynamic>;
             List likes = post['likes'] ?? [];
             bool isLiked = likes.contains(currentUserId);

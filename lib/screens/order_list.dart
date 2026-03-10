@@ -120,6 +120,36 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
+  Future<void> _toggleCustomOrderStatus(CustomOrder order) async {
+    final isCurrentlyDelivered = order.status == CustomOrderStatus.delivered;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('custom_orders')
+          .doc(order.id)
+          .update({
+            'status': isCurrentlyDelivered ? 'active' : 'delivered',
+            'completedAt': isCurrentlyDelivered ? null : Timestamp.now(),
+          });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isCurrentlyDelivered
+                ? 'Order moved back to active.'
+                : 'Order marked complete.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to update status: $e')));
+    }
+  }
+
   Widget _buildShopOrdersList() {
     return StreamBuilder<List<ShopOrder>>(
       stream: shopOrderService.getTailorOrdersStream(widget.tailorId),
@@ -412,6 +442,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     final daysRemaining = order.daysRemaining();
     final progressPercent =
         ((order.daysToDeliver - daysRemaining) / order.daysToDeliver) * 100;
+    final isCompleted = order.status == CustomOrderStatus.delivered;
 
     return GestureDetector(
       onTap: () {
@@ -505,6 +536,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _toggleCustomOrderStatus(order),
+                          icon: Icon(
+                            isCompleted ? Icons.restore : Icons.check_circle,
+                            size: 16,
+                          ),
+                          label: Text(
+                            isCompleted ? 'Mark Active' : 'Mark Complete',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isCompleted
+                                ? Colors.orange
+                                : AppColors.primary,
+                            side: BorderSide(
+                              color: isCompleted
+                                  ? Colors.orange.withOpacity(0.5)
+                                  : AppColors.primary.withOpacity(0.4),
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
                   // Timeline
                   Text(
@@ -525,6 +584,34 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       valueColor: AlwaysStoppedAnimation<Color>(urgencyColor),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today, size: 14, color: urgencyColor),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Due: ${order.dueDate != null ? _formatDate(order.dueDate!) : 'Not set'}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: urgencyColor,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(height: 1),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Order Timeline',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _buildCustomOrderTimeline(order),
                 ],
               ),
             ),
@@ -556,6 +643,77 @@ class _OrderListScreenState extends State<OrderListScreen> {
       default:
         return AppColors.primary;
     }
+  }
+
+  Widget _buildCustomOrderTimeline(CustomOrder order) {
+    final isCompleted = order.status == CustomOrderStatus.delivered;
+    final orderedDate = order.createdAt;
+    final due = order.dueDate;
+
+    return Column(
+      children: [
+        _timelineItem(title: 'Ordered', date: orderedDate, done: true),
+        _timelineLine(),
+        _timelineItem(
+          title: 'In Progress',
+          date: isCompleted ? (order.completedAt ?? due ?? orderedDate) : due,
+          done: true,
+        ),
+        _timelineLine(),
+        _timelineItem(
+          title: 'Completed',
+          date: order.completedAt,
+          done: isCompleted,
+        ),
+      ],
+    );
+  }
+
+  Widget _timelineItem({
+    required String title,
+    required DateTime? date,
+    required bool done,
+  }) {
+    final color = done ? AppColors.primary : Colors.grey;
+    return Row(
+      children: [
+        Icon(
+          done ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: 16,
+          color: color,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+        ),
+        Text(
+          date != null ? _formatDate(date) : '-',
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
+      ],
+    );
+  }
+
+  Widget _timelineLine() {
+    return Container(
+      margin: const EdgeInsets.only(left: 7, top: 2, bottom: 2),
+      width: 2,
+      height: 14,
+      color: AppColors.primary.withOpacity(0.25),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
   }
 
   Widget _buildTimelineBar(int daysRemaining, int totalDays, Color color) {

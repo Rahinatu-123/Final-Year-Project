@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:geolocator/geolocator.dart';
@@ -20,6 +21,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   TailorProfile? _profile;
   bool _isLoading = true;
   bool _isEditing = false;
+  bool _isPortfolioBusy = false;
   double? _latitude;
   double? _longitude;
 
@@ -114,6 +116,15 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
             ),
         ],
       ),
+      floatingActionButton: (!_isLoading && _profile != null)
+          ? FloatingActionButton.extended(
+              onPressed: _isPortfolioBusy ? null : _showPortfolioAddOptions,
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_photo_alternate_outlined),
+              label: const Text('Add To Portfolio'),
+            )
+          : null,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _profile == null
@@ -263,6 +274,45 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Future<void> _showPortfolioAddOptions() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              const ListTile(
+                title: Text(
+                  'Add To Portfolio',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.add_photo_alternate_outlined),
+                title: const Text('Add Design (No Post Needed)'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _uploadPortfolioImage();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.post_add),
+                title: const Text('Add From My Posts'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _showAddFromPostsSheet();
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -422,49 +472,136 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
   }
 
   Widget _buildPortfolioSection() {
+    final uid = profileService.getCurrentUserId();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Portfolio',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            if (_isPortfolioBusy)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _isPortfolioBusy ? null : _uploadPortfolioImage,
+              icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+              label: const Text('Add Design'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _isPortfolioBusy ? null : _showAddFromPostsSheet,
+              icon: const Icon(Icons.post_add, size: 18),
+              label: const Text('Add From My Posts'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
         const Text(
-          'Portfolio',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
-          ),
+          'You can upload designs directly here without posting.',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         const SizedBox(height: 16),
-        if (_profile!.portfolioImageUrls.isNotEmpty)
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemCount: _profile!.portfolioImageUrls.length,
-            itemBuilder: (context, index) {
-              return GestureDetector(
-                onLongPress: _isEditing
-                    ? () => _removePortfolioImage(
-                        _profile!.portfolioImageUrls[index],
-                      )
-                    : null,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    image: DecorationImage(
-                      image: NetworkImage(_profile!.portfolioImageUrls[index]),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+        if (uid == null)
+          const Text('Please login to manage portfolio')
+        else
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('tailor_portfolio')
+                .where('tailorId', isEqualTo: uid)
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final items = snapshot.data?.docs ?? [];
+              if (items.isEmpty) {
+                return const Text('No portfolio items yet');
+              }
+
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 0.78,
                 ),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final data = items[index].data() as Map<String, dynamic>;
+                  final imageUrl = (data['imageUrl'] ?? '').toString();
+                  final description = (data['description'] ?? '').toString();
+
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.surfaceVariant),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(10),
+                              topRight: Radius.circular(10),
+                            ),
+                            child: Image.network(
+                              imageUrl,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: Icon(Icons.broken_image),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(
+                            description.isEmpty
+                                ? 'No description'
+                                : description,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               );
             },
-          )
-        else
-          const Text('No portfolio images yet'),
+          ),
       ],
     );
   }
@@ -601,89 +738,37 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
         imageQuality: 85,
       );
 
-      if (pickedFile != null) {
-        // Show dialog for Cloudinary URL
-        final TextEditingController urlController = TextEditingController();
+      if (pickedFile == null) return;
 
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (dialogContext) => AlertDialog(
-              title: const Text('Add Cloudinary Image URL'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Paste your Cloudinary image URL here.\n\nExample: https://res.cloudinary.com/...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: urlController,
-                    decoration: InputDecoration(
-                      hintText: 'https://res.cloudinary.com/...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    maxLines: 2,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final url = urlController.text.trim();
-                    if (url.isNotEmpty && url.startsWith('http')) {
-                      Navigator.pop(dialogContext);
+      final uid = profileService.getCurrentUserId();
+      if (uid == null) return;
 
-                      // Add to profile
-                      try {
-                        final uid = profileService.getCurrentUserId() ?? '';
-                        await profileService.addPortfolioImage(uid, url);
+      final description = await _askPortfolioDescription();
+      if (description == null) return;
 
-                        // Reload profile
-                        await _loadProfile();
+      setState(() => _isPortfolioBusy = true);
+      final uploadedUrl = await cloudinaryService.uploadImage(
+        File(pickedFile.path),
+      );
 
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Image added to portfolio!'),
-                            backgroundColor: Color(0xFF2D6A4F),
-                          ),
-                        );
-                      } catch (e) {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error adding image: $e'),
-                            backgroundColor: AppColors.error,
-                          ),
-                        );
-                      }
-                    } else {
-                      ScaffoldMessenger.of(dialogContext).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter a valid Cloudinary URL'),
-                          backgroundColor: AppColors.error,
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            ),
-          );
-        }
+      if (uploadedUrl == null || uploadedUrl.isEmpty) {
+        throw Exception('Upload failed. Please try again.');
       }
+
+      await profileService.addPortfolioItem(
+        uid: uid,
+        imageUrl: uploadedUrl,
+        description: description,
+      );
+      await _loadProfile();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Design added to portfolio'),
+          backgroundColor: Color(0xFF2D6A4F),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -693,7 +778,263 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isPortfolioBusy = false);
+      }
     }
+  }
+
+  Future<String?> _askPortfolioDescription({String initialValue = ''}) async {
+    final controller = TextEditingController(text: initialValue);
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Portfolio Description'),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Add a short description',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(dialogContext, controller.text),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showAddFromPostsSheet() async {
+    final uid = profileService.getCurrentUserId();
+    if (uid == null) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * 0.75,
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                const Text(
+                  'Add From My Posts',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('posts')
+                        .where('userId', isEqualTo: uid)
+                        .limit(40)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text('Error loading posts: ${snapshot.error}'),
+                        );
+                      }
+
+                      final docs = [...(snapshot.data?.docs ?? [])]
+                        ..sort((a, b) {
+                          final aTs =
+                              (a.data() as Map<String, dynamic>)['timestamp']
+                                  as Timestamp?;
+                          final bTs =
+                              (b.data() as Map<String, dynamic>)['timestamp']
+                                  as Timestamp?;
+                          final aMs = aTs?.millisecondsSinceEpoch ?? 0;
+                          final bMs = bTs?.millisecondsSinceEpoch ?? 0;
+                          return bMs.compareTo(aMs);
+                        });
+                      if (docs.isEmpty) {
+                        return const Center(child: Text('No posts found yet'));
+                      }
+
+                      return ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                        itemCount: docs.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (context, index) {
+                          final data =
+                              docs[index].data() as Map<String, dynamic>;
+                          final imageUrls = _extractImageUrlsFromPost(data);
+                          final caption = (data['content'] ?? '').toString();
+
+                          return Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: AppColors.primary.withOpacity(0.2),
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: imageUrls.isNotEmpty
+                                      ? Image.network(
+                                          imageUrls.first,
+                                          width: 62,
+                                          height: 62,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                                width: 62,
+                                                height: 62,
+                                                color: Colors.grey.shade200,
+                                                child: const Icon(
+                                                  Icons.broken_image,
+                                                ),
+                                              ),
+                                        )
+                                      : Container(
+                                          width: 62,
+                                          height: 62,
+                                          color: Colors.grey.shade200,
+                                          child: const Icon(Icons.videocam),
+                                        ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        caption.isEmpty
+                                            ? '(No caption)'
+                                            : caption,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        imageUrls.isEmpty
+                                            ? 'No image in this post'
+                                            : '${imageUrls.length} image(s) available',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                ElevatedButton(
+                                  onPressed: imageUrls.isEmpty
+                                      ? null
+                                      : () async {
+                                          try {
+                                            final desc =
+                                                await _askPortfolioDescription(
+                                                  initialValue: caption,
+                                                );
+                                            if (desc == null) return;
+
+                                            setState(
+                                              () => _isPortfolioBusy = true,
+                                            );
+                                            await profileService
+                                                .addPortfolioItems(
+                                                  uid: uid,
+                                                  imageUrls: imageUrls,
+                                                  description: desc,
+                                                );
+                                            if (mounted) {
+                                              Navigator.pop(sheetContext);
+                                            }
+                                            await _loadProfile();
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Added ${imageUrls.length} image(s) from post',
+                                                ),
+                                                backgroundColor: const Color(
+                                                  0xFF2D6A4F,
+                                                ),
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            if (!mounted) return;
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Failed to add from post: $e',
+                                                ),
+                                                backgroundColor:
+                                                    AppColors.error,
+                                              ),
+                                            );
+                                          } finally {
+                                            if (mounted) {
+                                              setState(
+                                                () => _isPortfolioBusy = false,
+                                              );
+                                            }
+                                          }
+                                        },
+                                  child: const Text('Add'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<String> _extractImageUrlsFromPost(Map<String, dynamic> postData) {
+    final rawMedia = postData['mediaUrls'] as List<dynamic>? ?? [];
+    final urls = rawMedia.map((e) => e.toString()).toList();
+
+    return urls
+        .where((url) {
+          final lower = url.toLowerCase();
+          return lower.contains('/image/upload/') ||
+              lower.endsWith('.jpg') ||
+              lower.endsWith('.jpeg') ||
+              lower.endsWith('.png') ||
+              lower.endsWith('.webp');
+        })
+        .toSet()
+        .toList();
   }
 
   Future<void> _removePortfolioImage(String imageUrl) async {

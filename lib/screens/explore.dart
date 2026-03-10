@@ -1145,18 +1145,22 @@ class _ExplorePageState extends State<ExplorePage> {
     final description = style['description'] ?? '';
     final sellerName = style['sellerName'] ?? '';
 
-    final shareMessage =
-        'Check out this style: $styleName\nBy $sellerName\n\n$description\n$imageUrl';
-
-    // Send the message via chat
+    // Send as structured style message so chat can render the style card.
     FirebaseFirestore.instance
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .add({
-          'text': shareMessage,
+          'text': styleName,
           'senderId': currentUser.uid,
           'createdAt': FieldValue.serverTimestamp(),
+          'type': 'style_share',
+          'styleData': {
+            'name': styleName,
+            'description': description,
+            'sellerName': sellerName,
+            'imageUrl': imageUrl,
+          },
         });
 
     FirebaseFirestore.instance.collection('chats').doc(chatId).set({
