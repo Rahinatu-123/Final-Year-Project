@@ -245,7 +245,7 @@ class _ProductPreviewScreenState extends State<ProductPreviewScreen> {
                 return Image.network(
                   image,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     color: AppColors.surfaceVariant,
                     child: const Icon(Icons.image_not_supported, size: 64),
                   ),
@@ -255,7 +255,7 @@ class _ProductPreviewScreenState extends State<ProductPreviewScreen> {
                 return Image.file(
                   File(image),
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     color: AppColors.surfaceVariant,
                     child: const Icon(Icons.image_not_supported, size: 64),
                   ),
@@ -572,7 +572,7 @@ class _ProductPreviewScreenState extends State<ProductPreviewScreen> {
                                     child: Image.network(
                                       profileImage,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
+                                      errorBuilder: (_, _, _) =>
                                           const Icon(Icons.person),
                                     ),
                                   )

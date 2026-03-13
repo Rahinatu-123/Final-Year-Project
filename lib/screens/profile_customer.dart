@@ -21,7 +21,7 @@ class CustomerProfile extends StatefulWidget {
 class _CustomerProfileState extends State<CustomerProfile> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  late Map<String, int> _carouselIndices = {};
+  late final Map<String, int> _carouselIndices = {};
 
   String _displayName = "Loading...";
   String? _photoUrl;
@@ -1286,7 +1286,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
           });
 
         return Column(
-          children: [...posts.map((post) => _buildPostItem(post)).toList()],
+          children: [...posts.map((post) => _buildPostItem(post))],
         );
       },
     );
@@ -2138,7 +2138,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                           child: Image.network(
                             legacyUrls[index],
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
+                            errorBuilder: (_, _, _) => Container(
                               color: AppColors.surfaceVariant,
                               child: const Icon(Icons.image_not_supported),
                             ),
@@ -2278,7 +2278,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
                                 Image.network(
                                   legacyUrls[index],
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorBuilder: (_, _, _) => Container(
                                     color: AppColors.surfaceVariant,
                                     child: const Icon(
                                       Icons.image_not_supported,

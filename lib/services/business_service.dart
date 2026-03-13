@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class BusinessService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -13,7 +14,7 @@ class BusinessService {
     try {
       return await _firestore.collection('users').doc(userId).get();
     } catch (e) {
-      print('Error getting business profile: $e');
+      debugPrint('Error getting business profile: $e');
       return null;
     }
   }
@@ -58,7 +59,7 @@ class BusinessService {
 
       return true;
     } catch (e) {
-      print('Error saving business profile: $e');
+      debugPrint('Error saving business profile: $e');
       return false;
     }
   }
@@ -75,7 +76,7 @@ class BusinessService {
       });
       return true;
     } catch (e) {
-      print('Error updating business logo: $e');
+      debugPrint('Error updating business logo: $e');
       return false;
     }
   }
@@ -117,7 +118,7 @@ class BusinessService {
       });
       return true;
     } catch (e) {
-      print('Error deleting business profile: $e');
+      debugPrint('Error deleting business profile: $e');
       return false;
     }
   }
@@ -134,7 +135,7 @@ class BusinessService {
       });
       return true;
     } catch (e) {
-      print('Error toggling business status: $e');
+      debugPrint('Error toggling business status: $e');
       return false;
     }
   }

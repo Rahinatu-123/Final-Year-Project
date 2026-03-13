@@ -62,7 +62,7 @@ class _VisualizeStylePageState extends State<VisualizeStylePage> {
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(AppBorderRadius.lg),
                         border: Border.all(
-                          color: AppColors.primary.withOpacity(0.2),
+                          color: AppColors.primary.withValues(alpha: 0.2),
                           width: 2,
                         ),
                       ),
@@ -217,25 +217,6 @@ class _VisualizeStylePageState extends State<VisualizeStylePage> {
       _isImageSelected = false;
     });
   }
-
-  void _showUploadStyleDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Upload Style"),
-        content: const Text(
-          "You can now upload your own styles and share them with the community!",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _navigateToStyleGallery() {
     Navigator.push(
       context,

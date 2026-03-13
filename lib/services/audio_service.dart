@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -85,7 +86,7 @@ class AudioService {
     try {
       if (downloadUrl.isEmpty) return;
     } catch (e) {
-      print('Error deleting audio: $e');
+      debugPrint('Error deleting audio: $e');
     }
   }
 
@@ -114,7 +115,7 @@ class AudioService {
         await file.delete();
       }
     } catch (e) {
-      print('Error deleting local audio: $e');
+      debugPrint('Error deleting local audio: $e');
     }
   }
 }

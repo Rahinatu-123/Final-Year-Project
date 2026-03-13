@@ -175,7 +175,7 @@ class CustomOrderService {
           List<CustomOrder> orders = snapshot.docs
               .map(
                 (doc) => CustomOrder.fromMap(
-                  doc.data() as Map<String, dynamic>,
+                  doc.data(),
                   doc.id,
                 ),
               )

@@ -6,9 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../theme/app_theme.dart';
-import 'visualize_style.dart';
 import 'try_on.dart';
-import 'chat.dart';
 
 class StyleDetailPage extends StatefulWidget {
   final Map<String, dynamic> style;
@@ -68,7 +66,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                     height: 400,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 400,
                       color: AppColors.surfaceVariant,
                       child: const Icon(Icons.image_not_supported, size: 64),
@@ -95,7 +93,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.1),
+                            color: AppColors.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -210,9 +208,9 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                                     ),
                                   );
                                 } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
                                       content: Text('Error: ${e.toString()}'),
                                       backgroundColor: Colors.red,
                                     ),
@@ -276,10 +274,10 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
     final category = widget.style['category'] ?? widget.category;
     final currentStyleId = widget.styleId;
 
-    print('DEBUG: Attempting to find related styles');
-    print('DEBUG: Category value: "$category"');
-    print('DEBUG: Current Style ID: "$currentStyleId"');
-    print('DEBUG: Current style name: ${widget.style['name']}');
+    debugPrint('DEBUG: Attempting to find related styles');
+    debugPrint('DEBUG: Category value: "$category"');
+    debugPrint('DEBUG: Current Style ID: "$currentStyleId"');
+    debugPrint('DEBUG: Current style name: ${widget.style['name']}');
 
     if (category == null || category.toString().trim().isEmpty) {
       return Center(
@@ -308,34 +306,34 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
           .where('category', isEqualTo: category.toString().trim())
           .snapshots(),
       builder: (context, snapshot) {
-        print('DEBUG: StreamBuilder state - ${snapshot.connectionState}');
+        debugPrint('DEBUG: StreamBuilder state - ${snapshot.connectionState}');
         if (!snapshot.hasData) {
-          print('DEBUG: No data in snapshot');
+          debugPrint('DEBUG: No data in snapshot');
           return const Center(child: CircularProgressIndicator());
         }
 
-        print('DEBUG: Snapshot has ${snapshot.data!.docs.length} documents');
+        debugPrint('DEBUG: Snapshot has ${snapshot.data!.docs.length} documents');
 
         // Filter out the current style using document ID (more reliable)
         final styles = snapshot.data!.docs.where((doc) {
           final docId = doc.id;
           final isCurrentStyle =
               currentStyleId != null && docId == currentStyleId;
-          print('DEBUG: Doc ID: $docId, is current: $isCurrentStyle');
+          debugPrint('DEBUG: Doc ID: $docId, is current: $isCurrentStyle');
           return !isCurrentStyle;
         }).toList();
 
-        print('DEBUG: After filtering by ID: ${styles.length} styles found');
+        debugPrint('DEBUG: After filtering by ID: ${styles.length} styles found');
 
         if (styles.isEmpty) {
           // If filtering by ID found nothing, try filtering by name as fallback
-          print('DEBUG: No styles after ID filter, trying name filter...');
+          debugPrint('DEBUG: No styles after ID filter, trying name filter...');
           final stylesByName = snapshot.data!.docs.where((doc) {
             final docData = doc.data() as Map<String, dynamic>;
             return docData['name'] != widget.style['name'];
           }).toList();
 
-          print(
+          debugPrint(
             'DEBUG: After name filter: ${stylesByName.length} styles found',
           );
 
@@ -423,7 +421,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
             Image.network(
               style['imageUrl'] ?? '',
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 color: AppColors.surfaceVariant,
                 child: const Icon(Icons.style, size: 48),
               ),
@@ -433,7 +431,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
                   stops: const [0.4, 1.0],
                 ),
               ),
@@ -462,7 +460,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                       Text(
                         style['sellerName'],
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.8),
+                          color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 12,
                         ),
                         maxLines: 1,
@@ -618,7 +616,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                             height: 70,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.primary.withOpacity(0.1),
+                              color: AppColors.primary.withValues(alpha: 0.1),
                               border: Border.all(
                                 color: AppColors.primary,
                                 width: 2,
@@ -629,7 +627,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                                     child: Image.network(
                                       profileImage,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
+                                      errorBuilder: (_, _, _) =>
                                           const Icon(Icons.person),
                                     ),
                                   )
@@ -704,7 +702,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                     height: 56,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: (option['color'] as Color).withOpacity(0.15),
+                      color: (option['color'] as Color).withValues(alpha: 0.15),
                     ),
                     child: Icon(
                       option['icon'] as IconData,
@@ -790,8 +788,8 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
 
     final shareText = '$name\nBy $sellerName\n\n$description\n\n$imageUrl';
 
-    Share.share(
-      shareText.isNotEmpty ? shareText : 'Check out this style on FashionHub',
+    SharePlus.instance.share(
+      ShareParams(text: shareText.isNotEmpty ? shareText : 'Check out this style on FashionHub'),
     );
   }
 

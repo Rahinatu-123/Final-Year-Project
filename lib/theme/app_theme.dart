@@ -162,7 +162,7 @@ class AppTextStyles {
 class AppShadows {
   static List<BoxShadow> soft = [
     BoxShadow(
-      color: AppColors.textPrimary.withOpacity(0.04),
+      color: AppColors.textPrimary.withValues(alpha: 0.04),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),
@@ -170,7 +170,7 @@ class AppShadows {
 
   static List<BoxShadow> medium = [
     BoxShadow(
-      color: AppColors.textPrimary.withOpacity(0.08),
+      color: AppColors.textPrimary.withValues(alpha: 0.08),
       blurRadius: 20,
       offset: const Offset(0, 8),
     ),
@@ -178,7 +178,7 @@ class AppShadows {
 
   static List<BoxShadow> strong = [
     BoxShadow(
-      color: AppColors.textPrimary.withOpacity(0.12),
+      color: AppColors.textPrimary.withValues(alpha: 0.12),
       blurRadius: 30,
       offset: const Offset(0, 12),
     ),
@@ -186,7 +186,7 @@ class AppShadows {
 
   static List<BoxShadow> colored(Color color) => [
     BoxShadow(
-      color: color.withOpacity(0.3),
+      color: color.withValues(alpha: 0.3),
       blurRadius: 20,
       offset: const Offset(0, 8),
     ),
@@ -314,7 +314,7 @@ ThemeData appTheme() {
       shape: CircleBorder(),
     ),
     dividerTheme: DividerThemeData(
-      color: AppColors.textPrimary.withOpacity(0.08),
+      color: AppColors.textPrimary.withValues(alpha: 0.08),
       thickness: 1,
     ),
     chipTheme: ChipThemeData(

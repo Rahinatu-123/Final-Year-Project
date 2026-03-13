@@ -209,7 +209,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
                     height: 80,
                     width: 80,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 80,
                       width: 80,
                       color: AppColors.surfaceVariant,
@@ -231,7 +231,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "${group.professionalName}",
+                        group.professionalName,
                         style: AppTextStyles.bodySmall,
                       ),
                       const SizedBox(height: 8),
@@ -388,7 +388,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
               }).toList();
 
               return DropdownButtonFormField<String>(
-                value: _selectedTailorId,
+                initialValue: _selectedTailorId,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(

@@ -15,12 +15,12 @@ class OrdersScreen extends StatefulWidget {
   final bool isFabricSeller;
 
   const OrdersScreen({
-    Key? key,
+    super.key,
     required this.tailorId,
     required this.clientId,
     required this.clientName,
     this.isFabricSeller = false,
-  }) : super(key: key);
+  });
 
   @override
   State<OrdersScreen> createState() => _OrdersScreenState();
@@ -821,13 +821,13 @@ class OrderDetailCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   const OrderDetailCard({
-    Key? key,
+    super.key,
     required this.order,
     required this.onTap,
     required this.onEdit,
     required this.onToggleComplete,
     required this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

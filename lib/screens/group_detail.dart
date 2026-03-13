@@ -433,7 +433,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 CircleAvatar(
                   radius: 24,
                   backgroundImage: NetworkImage(member.userImage),
-                  onBackgroundImageError: (_, __) {},
+                  onBackgroundImageError: (_, _) {},
                 )
               else
                 CircleAvatar(

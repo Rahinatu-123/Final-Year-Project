@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../theme/app_theme.dart';
-import '../models/fabric.dart';
-import '../models/fabric_order.dart';
 import '../services/fabric_seller_service.dart';
 import 'fabric_seller_inventory.dart';
-import 'fabric_seller_orders.dart';
 import 'fabric_seller_shop_profile.dart';
 import 'fabric_seller_dashboard.dart';
 import 'fabric_seller_explore.dart';

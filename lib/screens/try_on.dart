@@ -118,7 +118,7 @@ class _TryOnScreenState extends State<TryOnScreen> {
           children: [
             // Category selector
             DropdownButtonFormField<String>(
-              value: _category,
+              initialValue: _category,
               decoration: const InputDecoration(
                 labelText: 'Garment category',
                 border: OutlineInputBorder(),
@@ -220,7 +220,7 @@ class _ImagePickerCard extends StatelessWidget {
   final String? imagePath;
   final VoidCallback onTap;
 
-  _ImagePickerCard({
+  const _ImagePickerCard({
     required this.label,
     required this.imagePath,
     required this.onTap,

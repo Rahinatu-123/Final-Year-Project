@@ -354,7 +354,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                       height: 60,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox(height: 60),
+                      errorBuilder: (_, _, _) => const SizedBox(height: 60),
                     ),
                   ),
                 ),

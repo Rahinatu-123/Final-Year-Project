@@ -678,7 +678,7 @@ class _ExplorePageState extends State<ExplorePage> {
               Image.network(
                 item['imageUrl'] ?? '',
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: AppColors.surfaceVariant,
                   child: Icon(
                     type == 'Fabrics' ? Icons.texture : Icons.style,
@@ -1025,7 +1025,7 @@ class _ExplorePageState extends State<ExplorePage> {
                                     child: Image.network(
                                       profileImage,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
+                                      errorBuilder: (_, _, _) =>
                                           const Icon(Icons.person),
                                     ),
                                   )
@@ -1347,7 +1347,7 @@ class _ExplorePageState extends State<ExplorePage> {
                                   child: Image.network(
                                     profileImage,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
+                                    errorBuilder: (_, _, _) =>
                                         const Icon(Icons.person),
                                   ),
                                 )

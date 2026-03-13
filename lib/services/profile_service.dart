@@ -215,7 +215,7 @@ class ProfileService {
       QuerySnapshot snapshot = await _firestore
           .collection(tailorsCollection)
           .where('businessName', isGreaterThanOrEqualTo: searchQuery)
-          .where('businessName', isLessThan: searchQuery + 'z')
+          .where('businessName', isLessThan: '${searchQuery}z')
           .get();
 
       return snapshot.docs

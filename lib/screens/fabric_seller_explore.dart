@@ -16,7 +16,7 @@ class _FabricSellerExploreState extends State<FabricSellerExplore> {
   final FabricSellerService _fabricService = FabricSellerService();
   final TextEditingController _searchController = TextEditingController();
   FabricType? _selectedType;
-  List<Fabric> _allFabrics = [];
+  final List<Fabric> _allFabrics = [];
   List<Fabric> _filteredFabrics = [];
   bool _isLoading = true;
 

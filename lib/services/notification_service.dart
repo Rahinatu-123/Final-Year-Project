@@ -160,7 +160,7 @@ class NotificationService {
           return snapshot.docs
               .map(
                 (doc) => AppNotification.fromMap(
-                  doc.data() as Map<String, dynamic>,
+                  doc.data(),
                   doc.id,
                 ),
               )

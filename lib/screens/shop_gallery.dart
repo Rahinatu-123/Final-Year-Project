@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
 import '../theme/app_theme.dart';
@@ -341,7 +340,7 @@ class _ShopGalleryPageState extends State<ShopGalleryPage> {
             if (product.isSoldOut)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
+                  color: Colors.black.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
@@ -415,21 +414,6 @@ class _ShopGalleryPageState extends State<ShopGalleryPage> {
       return Stream.value([]);
     } catch (e) {
       return Stream.error('Failed to load products: $e');
-    }
-  }
-
-  Future<List<Product>> _getFilteredProducts(String filter) async {
-    try {
-      if (filter == 'All') {
-        return await productService.getAllProducts();
-      } else if (filter == 'Clothes') {
-        return await productService.getProductsByType(ProductType.clothes);
-      } else if (filter == 'Fabric') {
-        return await productService.getProductsByType(ProductType.fabric);
-      }
-      return [];
-    } catch (e) {
-      throw Exception('Failed to load products: $e');
     }
   }
 }

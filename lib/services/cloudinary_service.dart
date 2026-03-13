@@ -228,7 +228,7 @@ class CloudinaryService {
         .map(
           (snapshot) => snapshot.docs
               .map(
-                (doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>},
+                (doc) => {'id': doc.id, ...doc.data()},
               )
               .toList(),
         );

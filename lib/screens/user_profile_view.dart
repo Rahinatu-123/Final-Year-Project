@@ -29,13 +29,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
           .collection('users')
           .doc(widget.uid)
           .get();
-      final data = doc.data() as Map<String, dynamic>?;
+        final data = doc.data();
 
       final tailorDoc = await FirebaseFirestore.instance
           .collection('tailors')
           .doc(widget.uid)
           .get();
-      final tailorData = tailorDoc.data() as Map<String, dynamic>?;
+        final tailorData = tailorDoc.data();
 
       // check if current user is connected to this profile
       final current = FirebaseAuth.instance.currentUser;
@@ -172,9 +172,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Container(
-                          height: 36,
-                          child: ElevatedButton(
+                          SizedBox(
+                            height: 36,
+                            child: ElevatedButton(
                             onPressed: _toggleFollow,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(

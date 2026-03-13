@@ -4,11 +4,9 @@ import '../theme/app_theme.dart';
 import '../models/shop_order.dart';
 import '../services/shop_order_service.dart';
 import 'visualize_style.dart';
-import 'style_gallery.dart';
 import 'sew_with_me.dart';
 import 'buy_fabric_with_me.dart';
-import 'explore.dart';
-import 'overlay.dart'; // AICameraOverlay for measurement capture
+// AICameraOverlay for measurement capture
 import 'indicator.dart'; // MeasurementIndicationScreen for measurement instructions
 import 'package:fashionhub/screens/mutual_connections.dart';
 import 'shop_order_detail.dart';

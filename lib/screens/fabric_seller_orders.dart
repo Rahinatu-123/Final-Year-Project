@@ -311,7 +311,7 @@ class _FabricSellerOrdersState extends State<FabricSellerOrders>
                       ],
                     ),
                   );
-                }).toList(),
+                }),
                 const Divider(height: 16),
                 _buildTimelineSection(order),
                 const Divider(height: 16),
@@ -716,7 +716,7 @@ class _FabricOrderDetailsSheetState extends State<FabricOrderDetailsSheet> {
                         const SizedBox(height: 8),
                       ],
                     );
-                  }).toList(),
+                  }),
                 ]),
                 const SizedBox(height: 16),
                 // Delivery Info

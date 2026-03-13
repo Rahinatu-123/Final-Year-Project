@@ -17,7 +17,7 @@ class CreatePostScreen extends StatefulWidget {
 }
 
 class _CreatePostScreenState extends State<CreatePostScreen> {
-  List<File> _selectedMedia = [];
+  final List<File> _selectedMedia = [];
   final TextEditingController _captionController = TextEditingController();
   final TextEditingController _tagController = TextEditingController();
   bool _isLoading = false;
@@ -25,8 +25,8 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   String _userName = 'Anonymous';
   String _userRole = 'Member';
 
-  Set<String> _selectedTags = {'Traditional'};
-  List<String> _availableTags = ['Traditional', 'Bridal', 'Casual', 'Lace'];
+  final Set<String> _selectedTags = {'Traditional'};
+  final List<String> _availableTags = ['Traditional', 'Bridal', 'Casual', 'Lace'];
 
   @override
   void initState() {
@@ -659,7 +659,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     ],
                                   ),
                                 );
-                              }).toList(),
+                              }),
                               GestureDetector(
                                 onTap: () => _showMediaPickerOptions(),
                                 child: Container(
@@ -773,7 +773,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                     children: [
                       ..._availableTags
                           .map((tag) => _buildTagChip(tag))
-                          .toList(),
+                          ,
                       _buildTagChip("+ Add", isAdd: true),
                     ],
                   ),

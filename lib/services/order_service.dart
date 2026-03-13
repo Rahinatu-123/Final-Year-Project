@@ -177,7 +177,7 @@ class OrderService {
           return snapshot.docs
               .map(
                 (doc) => order_model.Order.fromMap(
-                  doc.data() as Map<String, dynamic>,
+                  doc.data(),
                   doc.id,
                 ),
               )
@@ -196,7 +196,7 @@ class OrderService {
           return snapshot.docs
               .map(
                 (doc) => order_model.Order.fromMap(
-                  doc.data() as Map<String, dynamic>,
+                  doc.data(),
                   doc.id,
                 ),
               )

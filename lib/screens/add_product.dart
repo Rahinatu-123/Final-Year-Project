@@ -172,7 +172,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             _buildSection(
               title: 'Category',
               child: DropdownButtonFormField<String>(
-                value: selectedCategory,
+                initialValue: selectedCategory,
                 items:
                     (selectedType == ProductType.clothes
                             ? clothesCategories

@@ -33,7 +33,7 @@ class _AddOrderDialogState extends State<AddOrderDialog> {
   final TextEditingController _sizeController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
 
-  List<OrderVariant> _variants = [];
+  final List<OrderVariant> _variants = [];
 
   @override
   void initState() {

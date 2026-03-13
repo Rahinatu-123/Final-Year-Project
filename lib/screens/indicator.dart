@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
-import 'overlay.dart';
+import 'photo_capture_screen.dart';
 
 class MeasurementIndicationScreen extends StatefulWidget {
   const MeasurementIndicationScreen({super.key});
@@ -289,7 +289,7 @@ class _MeasurementIndicationScreenState
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const AICameraOverlay(),
+                        builder: (context) => const PhotoCaptureScreen(),
                       ),
                     );
                   },

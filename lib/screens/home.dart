@@ -180,7 +180,7 @@ class _UniversalHomeState extends State<UniversalHome> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
-        final TextEditingController _commentController =
+        final TextEditingController commentController =
             TextEditingController();
         return Padding(
           padding: MediaQuery.of(context).viewInsets,
@@ -235,7 +235,7 @@ class _UniversalHomeState extends State<UniversalHome> {
                     children: [
                       Expanded(
                         child: TextField(
-                          controller: _commentController,
+                          controller: commentController,
                           decoration: const InputDecoration(
                             hintText: 'Write a comment...',
                           ),
@@ -244,7 +244,7 @@ class _UniversalHomeState extends State<UniversalHome> {
                       IconButton(
                         icon: const Icon(Icons.send),
                         onPressed: () async {
-                          final text = _commentController.text.trim();
+                          final text = commentController.text.trim();
                           if (text.isEmpty) return;
                           final user = FirebaseAuth.instance.currentUser;
                           await FirebaseFirestore.instance
@@ -266,7 +266,7 @@ class _UniversalHomeState extends State<UniversalHome> {
                                 'commentCount': FieldValue.increment(1),
                               });
 
-                          _commentController.clear();
+                          commentController.clear();
                         },
                       ),
                     ],
@@ -602,6 +602,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
     _carouselIndices = {}; // initialize here
   }
 
+  @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Column(
@@ -1339,7 +1340,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
 
   // Show comments dialog for a post and allow adding a new comment
   void _showComments(String postId, Map<String, dynamic> post) {
-    final TextEditingController _commentController = TextEditingController();
+    final TextEditingController commentController = TextEditingController();
 
     showDialog(
       context: context,
@@ -1362,11 +1363,13 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     if (snap.hasError) {
                       return Center(child: Text('Error loading comments'));
                     }
-                    if (!snap.hasData)
+                    if (!snap.hasData) {
                       return const Center(child: CircularProgressIndicator());
+                    }
                     final docs = snap.data!.docs;
-                    if (docs.isEmpty)
+                    if (docs.isEmpty) {
                       return Center(child: Text('No comments yet'));
+                    }
                     return ListView.builder(
                       shrinkWrap: true,
                       itemCount: docs.length,
@@ -1400,7 +1403,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                 children: [
                   Expanded(
                     child: TextField(
-                      controller: _commentController,
+                      controller: commentController,
                       decoration: const InputDecoration(
                         hintText: 'Add a comment',
                       ),
@@ -1409,7 +1412,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                   IconButton(
                     icon: const Icon(Icons.send_outlined),
                     onPressed: () async {
-                      final text = _commentController.text.trim();
+                      final text = commentController.text.trim();
                       if (text.isEmpty) return;
                       try {
                         final user = FirebaseAuth.instance.currentUser;
@@ -1430,7 +1433,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                             .collection('posts')
                             .doc(postId)
                             .update({'commentCount': FieldValue.increment(1)});
-                        _commentController.clear();
+                        commentController.clear();
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Comment added')),

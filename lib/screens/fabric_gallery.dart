@@ -164,7 +164,7 @@ class _FabricGalleryPageState extends State<FabricGalleryPage> {
               Image.network(
                 fabric['imageUrl'] ?? '',
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: AppColors.surfaceVariant,
                   child: const Icon(Icons.texture, size: 48),
                 ),
@@ -262,7 +262,7 @@ class _FabricGalleryPageState extends State<FabricGalleryPage> {
                         height: 250,
                         width: double.infinity,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (_, _, _) => Container(
                           height: 250,
                           color: AppColors.surfaceVariant,
                           child: const Icon(Icons.texture, size: 64),
@@ -508,7 +508,7 @@ class _FabricGalleryPageState extends State<FabricGalleryPage> {
                                     child: Image.network(
                                       profileImage,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
+                                      errorBuilder: (_, _, _) =>
                                           const Icon(Icons.person),
                                     ),
                                   )

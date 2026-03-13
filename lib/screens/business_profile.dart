@@ -572,7 +572,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                               imageUrl,
                               width: double.infinity,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+                              errorBuilder: (_, _, _) => Container(
                                 color: Colors.grey.shade200,
                                 child: const Center(
                                   child: Icon(Icons.broken_image),
@@ -871,7 +871,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                       return ListView.separated(
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
                         itemCount: docs.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
                           final data =
                               docs[index].data() as Map<String, dynamic>;
@@ -896,7 +896,7 @@ class _BusinessProfileScreenState extends State<BusinessProfileScreen> {
                                           width: 62,
                                           height: 62,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
+                                          errorBuilder: (_, _, _) =>
                                               Container(
                                                 width: 62,
                                                 height: 62,

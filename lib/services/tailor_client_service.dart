@@ -237,7 +237,7 @@ class TailorClientService {
           List<TailorClient> clients = snapshot.docs
               .map(
                 (doc) => TailorClient.fromMap(
-                  doc.data() as Map<String, dynamic>,
+                  doc.data(),
                   doc.id,
                 ),
               )

@@ -209,7 +209,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
                     height: 80,
                     width: 80,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 80,
                       width: 80,
                       color: AppColors.surfaceVariant,
@@ -231,7 +231,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        "${group.professionalName}",
+                        group.professionalName,
                         style: AppTextStyles.bodySmall,
                       ),
                       const SizedBox(height: 8),
@@ -387,7 +387,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
               final sellers = snapshot.data!.docs;
 
               return DropdownButtonFormField<String>(
-                value: _selectedSellerId,
+                initialValue: _selectedSellerId,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(

@@ -162,7 +162,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
               CircleAvatar(
                 radius: 16,
                 backgroundImage: NetworkImage(message.senderImage),
-                onBackgroundImageError: (_, __) {},
+                onBackgroundImageError: (_, _) {},
               )
             else
               CircleAvatar(

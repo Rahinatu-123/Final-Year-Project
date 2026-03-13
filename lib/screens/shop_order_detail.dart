@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../models/shop_order.dart';
@@ -196,7 +194,7 @@ class _ShopOrderDetailScreenState extends State<ShopOrderDetailScreen> {
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _statusColor(order.status).withOpacity(0.1),
+                    color: _statusColor(order.status).withValues(alpha: 0.1),
                     border: Border.all(
                       color: _statusColor(order.status),
                       width: 2,
@@ -683,7 +681,7 @@ class _ShopOrderDetailScreenState extends State<ShopOrderDetailScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.coral.withOpacity(0.1),
+              color: AppColors.coral.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppColors.coral),
             ),
@@ -707,7 +705,7 @@ class _ShopOrderDetailScreenState extends State<ShopOrderDetailScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.1),
+              color: AppColors.error.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: AppColors.error),
             ),

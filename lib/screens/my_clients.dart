@@ -20,11 +20,11 @@ class MyClientsScreen extends StatefulWidget {
   final bool isFabricSeller;
 
   const MyClientsScreen({
-    Key? key,
+    super.key,
     required this.tailorId,
     required this.tailorName,
     this.isFabricSeller = false,
-  }) : super(key: key);
+  });
 
   @override
   State<MyClientsScreen> createState() => _MyClientsScreenState();
@@ -236,12 +236,12 @@ class ClientCard extends StatelessWidget {
   final VoidCallback onDelete;
 
   const ClientCard({
-    Key? key,
+    super.key,
     required this.client,
     required this.orderCount,
     required this.onTap,
     required this.onDelete,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -380,11 +380,11 @@ class AddClientForm extends StatefulWidget {
   final bool isFabricSeller;
 
   const AddClientForm({
-    Key? key,
+    super.key,
     required this.tailorId,
     required this.onClientAdded,
     this.isFabricSeller = false,
-  }) : super(key: key);
+  });
 
   @override
   State<AddClientForm> createState() => _AddClientFormState();
@@ -443,7 +443,9 @@ class _AddClientFormState extends State<AddClientForm> {
       controller.dispose();
     }
     for (var custom in _customMeasurements) {
-      custom.values.forEach((c) => c.dispose());
+      for (var c in custom.values) {
+        c.dispose();
+      }
     }
     super.dispose();
   }
@@ -640,7 +642,9 @@ class _AddClientFormState extends State<AddClientForm> {
 
   void _removeCustomMeasurement(int index) {
     setState(() {
-      _customMeasurements[index].values.forEach((c) => c.dispose());
+      for (var c in _customMeasurements[index].values) {
+        c.dispose();
+      }
       _customMeasurements.removeAt(index);
     });
   }
@@ -1206,7 +1210,7 @@ class _AddClientFormState extends State<AddClientForm> {
                             ],
                           ),
                         );
-                      }).toList(),
+                      }),
                     ],
                     const SizedBox(height: 12),
                     SizedBox(

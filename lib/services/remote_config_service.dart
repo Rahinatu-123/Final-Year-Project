@@ -45,11 +45,11 @@ class RemoteConfigService {
       await _remoteConfig.fetchAndActivate();
       _cachedApiUrl = _readApiUrl();
 
-      print('✅ Remote Config initialized successfully');
-      print('📡 API URL: ${getApiUrl()}');
+      debugPrint('✅ Remote Config initialized successfully');
+      debugPrint('📡 API URL: ${getApiUrl()}');
     } catch (e) {
-      print('⚠️ Remote Config initialization failed: $e');
-      print('💡 Using default values');
+      debugPrint('⚠️ Remote Config initialization failed: $e');
+      debugPrint('💡 Using default values');
     }
   }
 
@@ -99,9 +99,9 @@ class RemoteConfigService {
     try {
       await _remoteConfig.fetchAndActivate();
       _cachedApiUrl = _readApiUrl();
-      print('✅ Remote Config refreshed');
+      debugPrint('✅ Remote Config refreshed');
     } catch (e) {
-      print('⚠️ Failed to refresh Remote Config: $e');
+      debugPrint('⚠️ Failed to refresh Remote Config: $e');
     }
   }
 

@@ -170,7 +170,7 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
               Image.network(
                 style['imageUrl'] ?? '',
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: AppColors.surfaceVariant,
                   child: const Icon(Icons.image_not_supported),
                 ),
@@ -180,7 +180,7 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
                     stops: const [0.4, 1.0],
                   ),
                 ),
@@ -207,7 +207,7 @@ class _StyleGalleryPageState extends State<StyleGalleryPage> {
                         Text(
                           style['description'],
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             fontSize: 12,
                           ),
                         ),

@@ -34,7 +34,7 @@ class _AddFabricListingState extends State<AddFabricListing> {
   List<String> _imageUrls = [];
 
   bool _isLoading = false;
-  String _sellerName = 'Fabric Seller'; // This should come from user profile
+  final String _sellerName = 'Fabric Seller'; // This should come from user profile
 
   @override
   Widget build(BuildContext context) {

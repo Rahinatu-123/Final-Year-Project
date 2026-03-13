@@ -157,7 +157,7 @@ class _FabricSellerInventoryState extends State<FabricSellerInventory> {
                                   },
                                 ),
                               );
-                            }).toList(),
+                            }),
                           ],
                         ),
                       ),

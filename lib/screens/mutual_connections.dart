@@ -84,7 +84,7 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
                       var userData = userDoc.data() as Map<String, dynamic>;
 
                       // Debug: Print user data
-                      print('User ${index + 1}: ${userDoc.id} - ${userData}');
+                      print('User ${index + 1}: ${userDoc.id} - $userData');
 
                       return _buildChatTile(
                         context,

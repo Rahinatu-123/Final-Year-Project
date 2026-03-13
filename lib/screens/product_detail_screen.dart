@@ -383,7 +383,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               return Image.network(
                 widget.product.imageUrls[index],
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   color: AppColors.surfaceVariant,
                   child: const Icon(Icons.image_not_supported, size: 64),
                 ),
@@ -707,7 +707,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     child: Image.network(
                                       profileImage,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) =>
+                                      errorBuilder: (_, _, _) =>
                                           const Icon(Icons.person),
                                     ),
                                   )
@@ -872,7 +872,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             Image.network(
               product.imageUrls.isNotEmpty ? product.imageUrls.first : '',
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 color: AppColors.surfaceVariant,
                 child: const Icon(Icons.image_not_supported, size: 48),
               ),

@@ -377,7 +377,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (_, _, _) => Container(
                     height: 200,
                     color: AppColors.surfaceVariant,
                     child: const Icon(Icons.image_not_supported),

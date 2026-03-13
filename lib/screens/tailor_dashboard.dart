@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
-import '../models/order.dart';
 import '../models/shop_order.dart';
 import '../models/custom_order.dart';
 import '../services/order_service.dart';
@@ -8,7 +7,6 @@ import '../services/shop_order_service.dart';
 import '../services/custom_order_service.dart';
 import '../theme/app_theme.dart';
 import 'order_list.dart';
-import 'order_details.dart';
 import 'my_shop.dart';
 import 'mutual_connections.dart';
 import 'my_clients.dart';
@@ -179,14 +177,14 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: AppShadows.soft,
-        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 28),
@@ -219,7 +217,7 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
           Icon(
             Icons.arrow_forward_ios,
             size: 16,
-            color: color.withOpacity(0.6),
+            color: color.withValues(alpha: 0.6),
           ),
         ],
       ),
@@ -342,55 +340,6 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
     );
   }
 
-  Future<Map<String, dynamic>> _fetchAnalyticsData() async {
-    try {
-      final customOrders = await customOrderService.getCustomOrdersByTailorId(
-        widget.tailorId,
-      );
-      final shopOrders = await shopOrderService.getTailorOrders(
-        widget.tailorId,
-      );
-
-      int totalOrders = customOrders.length + shopOrders.length;
-      int completedOrders = 0;
-      int pendingOrders = 0;
-      double totalIncome = 0.0;
-
-      for (var order in customOrders) {
-        if (order.status == CustomOrderStatus.delivered) {
-          completedOrders++;
-          totalIncome += order.basePrice;
-        } else if (order.status == CustomOrderStatus.active) {
-          pendingOrders++;
-        }
-      }
-
-      for (final order in shopOrders) {
-        if (order.status == ShopOrderStatus.completed) {
-          completedOrders++;
-          totalIncome += order.getTotalPrice();
-        } else if (order.status != ShopOrderStatus.cancelled) {
-          pendingOrders++;
-        }
-      }
-
-      return {
-        'totalOrders': totalOrders,
-        'completedOrders': completedOrders,
-        'pendingOrders': pendingOrders,
-        'totalIncome': totalIncome,
-      };
-    } catch (e) {
-      print('Error fetching analytics: $e');
-      return {
-        'totalOrders': 0,
-        'completedOrders': 0,
-        'pendingOrders': 0,
-        'totalIncome': 0.0,
-      };
-    }
-  }
-
   Widget _buildStatCard({
     required String title,
     required String value,
@@ -400,8 +349,8 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        border: Border.all(color: color.withOpacity(0.15)),
+        color: color.withValues(alpha: 0.08),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -509,7 +458,7 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      border: Border.all(color: urgencyColor.withOpacity(0.2)),
+                      border: Border.all(color: urgencyColor.withValues(alpha: 0.2)),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -571,7 +520,5 @@ class _TailorDashboardScreenState extends State<TailorDashboardScreen> {
       case DeliveryUrgency.red:
         return const Color(0xFFBA1A1A);
     }
-
-    return const Color(0xFFBA1A1A);
   }
 }

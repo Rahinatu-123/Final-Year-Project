@@ -260,7 +260,7 @@ class ChatService {
           return snapshot.docs
               .map(
                 (doc) => ChatMessage.fromMap(
-                  doc.data() as Map<String, dynamic>,
+                  doc.data(),
                   doc.id,
                 ),
               )
@@ -325,7 +325,7 @@ class ChatService {
           return snapshot.docs
               .map(
                 (doc) => Conversation.fromMap(
-                  doc.data() as Map<String, dynamic>,
+                  doc.data(),
                   doc.id,
                 ),
               )
