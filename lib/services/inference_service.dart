@@ -113,7 +113,7 @@ class InferenceService {
 
     stopwatch.stop();
 
-    // ── Debug response ─────────────────────────────────────────────────────
+    // ── Debug response 
     debugPrint('Response status: ${response.statusCode}');
     debugPrint('Response body: ${response.body}');
 
@@ -127,13 +127,13 @@ class InferenceService {
       throw Exception('Prediction failed: ${json['error']}');
     }
 
-    // ── Step 5: Parse measurements ─────────────────────────────────────────
+    // ── Step 5: Parse measurements
     final rawMeasurements = json['measurements'] as Map<String, dynamic>;
     final measurements = rawMeasurements.map(
       (key, value) => MapEntry(key, (value as num).toDouble()),
     );
 
-    // ── Print results ──────────────────────────────────────────────────────
+    // ── Print results 
     debugPrint('');
     debugPrint('══════════════════════════════════════════');
     debugPrint('  Body Measurement Results');
