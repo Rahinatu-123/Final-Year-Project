@@ -19,7 +19,9 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
   Future<void> _pickPhoto(bool isFront) async {
     final picked = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 90,
+      imageQuality: 75,
+      maxWidth: 1080,
+      maxHeight: 1920,
       preferredCameraDevice: CameraDevice.rear,
     );
     if (picked == null) return;
@@ -35,7 +37,9 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
   Future<void> _pickFromGallery(bool isFront) async {
     final picked = await _picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 90,
+      imageQuality: 75,
+      maxWidth: 1080,
+      maxHeight: 1920,
     );
     if (picked == null) return;
     setState(() {
@@ -73,10 +77,14 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
               _pickPhoto(isFront);
             }),
             const SizedBox(height: 12),
-            _sheetButton(Icons.photo_library_outlined, 'Choose from Gallery', () {
-              Navigator.pop(context);
-              _pickFromGallery(isFront);
-            }),
+            _sheetButton(
+              Icons.photo_library_outlined,
+              'Choose from Gallery',
+              () {
+                Navigator.pop(context);
+                _pickFromGallery(isFront);
+              },
+            ),
             const SizedBox(height: 8),
           ],
         ),
@@ -95,7 +103,9 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
           foregroundColor: AppColors.textPrimary,
           side: const BorderSide(color: AppColors.textTertiary),
           padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
     );
@@ -167,9 +177,15 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              _buildTip(Icons.straighten, 'Stand straight, feet slightly apart'),
+              _buildTip(
+                Icons.straighten,
+                'Stand straight, feet slightly apart',
+              ),
               _buildTip(Icons.accessibility, 'Arms slightly away from body'),
-              _buildTip(Icons.wb_sunny_outlined, 'Good lighting, plain background'),
+              _buildTip(
+                Icons.wb_sunny_outlined,
+                'Good lighting, plain background',
+              ),
               _buildTip(Icons.person_outline, 'Full body head to feet visible'),
               const Spacer(),
               SizedBox(
@@ -178,14 +194,14 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                 child: ElevatedButton(
                   onPressed: canContinue
                       ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => DetailsScreen(
-                                frontPhoto: _frontPhoto!,
-                                sidePhoto: _sidePhoto!,
-                              ),
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DetailsScreen(
+                              frontPhoto: _frontPhoto!,
+                              sidePhoto: _sidePhoto!,
                             ),
-                          )
+                          ),
+                        )
                       : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
@@ -198,7 +214,10 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                   ),
                   child: Text(
                     canContinue ? 'Continue' : 'Take Both Photos to Continue',
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -246,7 +265,11 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                           color: AppColors.primary,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.check, color: Colors.white, size: 14),
+                        child: const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 14,
+                        ),
                       ),
                     ),
                     Positioned(
@@ -259,7 +282,10 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                           gradient: LinearGradient(
                             begin: Alignment.bottomCenter,
                             end: Alignment.topCenter,
-                            colors: [Colors.black.withOpacity(0.7), Colors.transparent],
+                            colors: [
+                              Colors.black.withOpacity(0.7),
+                              Colors.transparent,
+                            ],
                           ),
                         ),
                         child: Text(
@@ -278,7 +304,11 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, color: AppColors.primary.withOpacity(0.5), size: 40),
+                    Icon(
+                      icon,
+                      color: AppColors.primary.withOpacity(0.5),
+                      size: 40,
+                    ),
                     const SizedBox(height: 12),
                     Text(
                       label,
@@ -301,9 +331,14 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                     ),
                     const SizedBox(height: 16),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.primary.withOpacity(0.4)),
+                        border: Border.all(
+                          color: AppColors.primary.withOpacity(0.4),
+                        ),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Text(
@@ -331,10 +366,7 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
           const SizedBox(width: 10),
           Text(
             text,
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
           ),
         ],
       ),

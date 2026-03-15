@@ -14,13 +14,14 @@ class MeasurementResult {
 }
 
 class InferenceService {
-  static const String _baseUrl = 'https://bodym-server-production.up.railway.app';
+  static const String _baseUrl = 'https://bodym.up.railway.app';
+  static final Uri _baseUri = Uri.parse(_baseUrl);
 
   /// Check if the server is reachable.
   Future<bool> isReady() async {
     try {
       final response = await http
-          .get(Uri.parse('$_baseUrl/health'))
+          .get(_baseUri.resolve('/health'))
           .timeout(const Duration(seconds: 20));
       return response.statusCode == 200;
     } catch (_) {
@@ -44,14 +45,16 @@ class InferenceService {
     for (int i = 0; i < 20; i++) {
       try {
         final response = await http
-            .get(Uri.parse('$_baseUrl/health'))
+            .get(_baseUri.resolve('/health'))
             .timeout(const Duration(seconds: 15));
         if (response.statusCode == 200) {
           serverReady = true;
           debugPrint('✓ Server is ready');
           break;
         }
-        debugPrint('Health returned ${response.statusCode}, retrying... (${i + 1}/20)');
+        debugPrint(
+          'Health returned ${response.statusCode}, retrying... (${i + 1}/20)',
+        );
         await Future.delayed(const Duration(seconds: 3));
       } catch (_) {
         debugPrint('Retrying... (${i + 1}/20)');
@@ -67,17 +70,15 @@ class InferenceService {
     Future<http.MultipartRequest> buildPredictRequest() async {
       final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$_baseUrl/predict'),
+        _baseUri.resolve('/predict'),
       );
 
-      request.files.add(await http.MultipartFile.fromPath(
-        'front_image',
-        frontImage.path,
-      ));
-      request.files.add(await http.MultipartFile.fromPath(
-        'side_image',
-        sideImage.path,
-      ));
+      request.files.add(
+        await http.MultipartFile.fromPath('front_image', frontImage.path),
+      );
+      request.files.add(
+        await http.MultipartFile.fromPath('side_image', sideImage.path),
+      );
 
       request.fields['gender'] = gender;
       request.fields['height_cm'] = heightCm.toString();
@@ -86,7 +87,7 @@ class InferenceService {
       return request;
     }
 
-    debugPrint('Sending request to: $_baseUrl/predict');
+    debugPrint('Sending request to: ${_baseUri.resolve('/predict')}');
 
     http.Response? response;
     for (int i = 0; i < 3; i++) {
@@ -128,7 +129,7 @@ class InferenceService {
 
     // ── Step 5: Parse measurements ─────────────────────────────────────────
     final rawMeasurements = json['measurements'] as Map<String, dynamic>;
-    final measurements    = rawMeasurements.map(
+    final measurements = rawMeasurements.map(
       (key, value) => MapEntry(key, (value as num).toDouble()),
     );
 
@@ -145,7 +146,7 @@ class InferenceService {
     debugPrint('══════════════════════════════════════════');
 
     return MeasurementResult(
-      measurements:  measurements,
+      measurements: measurements,
       inferenceTime: stopwatch.elapsed,
     );
   }

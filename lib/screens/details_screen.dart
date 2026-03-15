@@ -133,7 +133,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,7 +190,8 @@ class _DetailsScreenState extends State<DetailsScreen> {
                     child: _heightUnitButton(
                       title: 'FT / IN',
                       selected: _heightUnit == HeightUnit.ftIn,
-                      onTap: () => setState(() => _heightUnit = HeightUnit.ftIn),
+                      onTap: () =>
+                          setState(() => _heightUnit = HeightUnit.ftIn),
                     ),
                   ),
                 ],
@@ -228,7 +229,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
                 label: 'WEIGHT (KG)',
                 hint: 'e.g. 70',
               ),
-              const Spacer(),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -249,7 +250,9 @@ class _DetailsScreenState extends State<DetailsScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.textOnPrimary),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.textOnPrimary,
+                            ),
                           ),
                         )
                       : const Text(
@@ -341,10 +344,7 @@ class _DetailsScreenState extends State<DetailsScreen> {
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 15,
-            ),
+            hintStyle: TextStyle(color: AppColors.textTertiary, fontSize: 15),
             filled: true,
             fillColor: AppColors.surfaceVariant,
             contentPadding: const EdgeInsets.symmetric(

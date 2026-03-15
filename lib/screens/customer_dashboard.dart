@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:share_plus/share_plus.dart';
 import '../theme/app_theme.dart';
 import '../models/shop_order.dart';
 import '../services/shop_order_service.dart';
+import '../services/measurement_service.dart';
 import 'visualize_style.dart';
 import 'sew_with_me.dart';
 import 'buy_fabric_with_me.dart';
 // AICameraOverlay for measurement capture
 import 'indicator.dart'; // MeasurementIndicationScreen for measurement instructions
+import 'all_measurements_page.dart';
 import 'package:fashionhub/screens/mutual_connections.dart';
 import 'shop_order_detail.dart';
 
@@ -20,6 +24,7 @@ class CustomerDashboard extends StatefulWidget {
 
 class _CustomerDashboardState extends State<CustomerDashboard> {
   late ShopOrderService _orderService;
+  final MeasurementService _measurementService = MeasurementService();
 
   @override
   void initState() {
@@ -321,80 +326,489 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Widget _buildMeasurementCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.darkGradient,
-        borderRadius: BorderRadius.circular(AppBorderRadius.lg),
-        boxShadow: AppShadows.medium,
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: _measurementService.watchLatestMeasurement(),
+      builder: (context, snapshot) {
+        final latest = snapshot.data;
+        final measurementsRaw =
+            latest?['measurements'] as Map<String, dynamic>?;
+        final measurements = measurementsRaw == null
+            ? <String, dynamic>{}
+            : Map<String, dynamic>.from(measurementsRaw);
+
+        final bust = _formatInches(measurements['chest']);
+        final waist = _formatInches(measurements['waist']);
+        final hips = _formatInches(measurements['hip']);
+        final length = _formatInches(
+          measurements['outseam'] ??
+              measurements['leg-length'] ??
+              measurements['inseam'],
+        );
+
+        final hasMeasurement = measurements.isNotEmpty;
+
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: AppColors.darkGradient,
+            borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+            boxShadow: AppShadows.medium,
+          ),
+          child: Column(
             children: [
-              Text(
-                "Body Measurements",
-                style: AppTextStyles.labelLarge.copyWith(color: Colors.white70),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.success.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppBorderRadius.xl),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: AppColors.accentLight,
-                      size: 14,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Body Measurements',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: Colors.white70,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      "Updated",
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.accentLight,
-                        fontWeight: FontWeight.w600,
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: hasMeasurement
+                          ? AppColors.success.withOpacity(0.2)
+                          : Colors.white.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(AppBorderRadius.xl),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          hasMeasurement
+                              ? Icons.check_circle
+                              : Icons.info_outline,
+                          color: hasMeasurement
+                              ? AppColors.accentLight
+                              : Colors.white70,
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          hasMeasurement ? 'Updated' : 'No data',
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: hasMeasurement
+                                ? AppColors.accentLight
+                                : Colors.white70,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _MeasureItem('Bust', bust, 'in'),
+                  _MeasureItem('Waist', waist, 'in'),
+                  _MeasureItem('Hips', hips, 'in'),
+                  _MeasureItem('Length', length, 'in'),
+                ],
+              ),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: hasMeasurement
+                    ? () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              AllMeasurementsPage(measurements: measurements),
+                        ),
+                      )
+                    : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const MeasurementIndicationScreen(),
+                        ),
+                      ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                  ),
+                  child: Center(
+                    child: Text(
+                      hasMeasurement
+                          ? 'View All Measurements'
+                          : 'Generate Measurements',
+                      style: AppTextStyles.buttonMedium.copyWith(
+                        color: Colors.white,
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
+              if (hasMeasurement) ...[
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openShareOptions(
+                      latest: latest,
+                      measurements: measurements,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.white.withOpacity(0.45)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                      ),
+                    ),
+                    icon: const Icon(Icons.share_outlined, size: 18),
+                    label: const Text('Share Measurements'),
+                  ),
+                ),
+              ],
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              _MeasureItem("Bust", "34", "in"),
-              _MeasureItem("Waist", "28", "in"),
-              _MeasureItem("Hips", "38", "in"),
-              _MeasureItem("Length", "42", "in"),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(AppBorderRadius.md),
-            ),
-            child: Center(
-              child: Text(
-                "View All Measurements",
-                style: AppTextStyles.buttonMedium.copyWith(color: Colors.white),
+        );
+      },
+    );
+  }
+
+  Future<void> _shareLatestMeasurements({
+    required Map<String, dynamic>? latest,
+    required Map<String, dynamic> measurements,
+  }) async {
+    if (measurements.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No measurements available to share.')),
+      );
+      return;
+    }
+
+    final typedMeasurements = measurements.map((key, value) {
+      final parsed = value is num
+          ? value.toDouble()
+          : double.tryParse(value.toString()) ?? 0.0;
+      return MapEntry(key, parsed);
+    });
+
+    final gender = (latest?['gender'] ?? 'unknown').toString();
+    final heightCm = (latest?['heightCm'] as num?)?.toDouble() ?? 0;
+    final weightKg = (latest?['weightKg'] as num?)?.toDouble() ?? 0;
+
+    final shareText = MeasurementService.buildShareText(
+      gender: gender,
+      heightCm: heightCm,
+      weightKg: weightKg,
+      measurements: typedMeasurements,
+    );
+
+    await Share.share(shareText);
+  }
+
+  Future<void> _openShareOptions({
+    required Map<String, dynamic>? latest,
+    required Map<String, dynamic> measurements,
+  }) async {
+    if (measurements.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No measurements available to share.')),
+      );
+      return;
+    }
+
+    final typedMeasurements = measurements.map((key, value) {
+      final parsed = value is num
+          ? value.toDouble()
+          : double.tryParse(value.toString()) ?? 0.0;
+      return MapEntry(key, parsed);
+    });
+
+    final gender = (latest?['gender'] ?? 'unknown').toString();
+    final heightCm = (latest?['heightCm'] as num?)?.toDouble() ?? 0;
+    final weightKg = (latest?['weightKg'] as num?)?.toDouble() ?? 0;
+
+    final recipients = await _loadChatRecipients();
+    if (!mounted) return;
+
+    MeasurementShareUnit selectedUnit = MeasurementShareUnit.both;
+
+    String shareTextFor(MeasurementShareUnit unit) {
+      return MeasurementService.buildShareText(
+        gender: gender,
+        heightCm: heightCm,
+        weightKg: weightKg,
+        measurements: typedMeasurements,
+        unit: unit,
+      );
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setModalState) => SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Share Measurements', style: AppTextStyles.h4),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('CM'),
+                        selected: selectedUnit == MeasurementShareUnit.cm,
+                        onSelected: (_) => setModalState(() {
+                          selectedUnit = MeasurementShareUnit.cm;
+                        }),
+                      ),
+                      ChoiceChip(
+                        label: const Text('INCH'),
+                        selected: selectedUnit == MeasurementShareUnit.inch,
+                        onSelected: (_) => setModalState(() {
+                          selectedUnit = MeasurementShareUnit.inch;
+                        }),
+                      ),
+                      ChoiceChip(
+                        label: const Text('BOTH'),
+                        selected: selectedUnit == MeasurementShareUnit.both,
+                        onSelected: (_) => setModalState(() {
+                          selectedUnit = MeasurementShareUnit.both;
+                        }),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 90,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        GestureDetector(
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await Share.share(shareTextFor(selectedUnit));
+                          },
+                          child: SizedBox(
+                            width: 78,
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.ios_share,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Outside',
+                                  style: AppTextStyles.labelSmall,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Your Chat Contacts',
+                    style: AppTextStyles.labelLarge.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (recipients.isEmpty)
+                    Text(
+                      'No existing chats yet. Start a chat first, then share here.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      height: 94,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: recipients.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (context, index) {
+                          final recipient = recipients[index];
+                          final username = recipient['username'] ?? 'User';
+                          final shortName = username.length > 10
+                              ? '${username.substring(0, 10)}...'
+                              : username;
+
+                          return GestureDetector(
+                            onTap: () async {
+                              Navigator.pop(context);
+                              await _sendMeasurementToChat(
+                                chatId: recipient['chatId']!,
+                                otherUserId: recipient['userId']!,
+                                otherUserName: username,
+                                shareText: shareTextFor(selectedUnit),
+                                typedMeasurements: typedMeasurements,
+                              );
+                            },
+                            child: SizedBox(
+                              width: 74,
+                              child: Column(
+                                children: [
+                                  Container(
+                                    width: 56,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceVariant,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.person,
+                                      color: AppColors.textTertiary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    shortName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: AppTextStyles.labelSmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  Future<List<Map<String, String>>> _loadChatRecipients() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return [];
+
+    final chatsSnapshot = await FirebaseFirestore.instance
+        .collection('chats')
+        .where('participants', arrayContains: currentUser.uid)
+        .get();
+
+    final recipients = <Map<String, String>>[];
+    final seenUserIds = <String>{};
+
+    for (final chatDoc in chatsSnapshot.docs) {
+      final chatData = chatDoc.data();
+      final participants = (chatData['participants'] as List<dynamic>? ?? [])
+          .map((e) => e.toString())
+          .toList();
+
+      String? otherUserId;
+      for (final participantId in participants) {
+        if (participantId != currentUser.uid) {
+          otherUserId = participantId;
+          break;
+        }
+      }
+
+      if (otherUserId == null || seenUserIds.contains(otherUserId)) {
+        continue;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(otherUserId)
+          .get();
+      final userData = userDoc.data();
+      final username = (userData?['username'] ?? userData?['name'] ?? 'User')
+          .toString();
+
+      recipients.add({
+        'chatId': chatDoc.id,
+        'userId': otherUserId,
+        'username': username,
+      });
+      seenUserIds.add(otherUserId);
+    }
+
+    return recipients;
+  }
+
+  Future<void> _sendMeasurementToChat({
+    required String chatId,
+    required String otherUserId,
+    required String otherUserName,
+    required String shareText,
+    required Map<String, double> typedMeasurements,
+  }) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || !mounted) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .add({
+            'text': shareText,
+            'senderId': currentUser.uid,
+            'createdAt': FieldValue.serverTimestamp(),
+            'type': 'measurement_share',
+            'measurementData': typedMeasurements,
+          });
+
+      await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
+        'lastMessage': 'Shared body measurements',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'participants': FieldValue.arrayUnion([currentUser.uid, otherUserId]),
+      }, SetOptions(merge: true));
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Measurements shared with $otherUserName')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not share in chat: $error')),
+      );
+    }
+  }
+
+  String _formatInches(dynamic value) {
+    if (value == null) return '--';
+    final cm = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString());
+    if (cm == null) return '--';
+    return (cm / 2.54).toStringAsFixed(1);
   }
 
   Widget _buildOrderTile(BuildContext context, ShopOrder order) {
