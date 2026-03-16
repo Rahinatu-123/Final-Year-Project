@@ -63,12 +63,27 @@ class _SewWithMePageState extends State<SewWithMePage> {
         ),
       ),
       body: _showCreateForm ? _buildCreatePortal() : _buildMainPortal(),
-      floatingActionButton: !_showCreateForm
-          ? FloatingActionButton.extended(
-              onPressed: () => setState(() => _showCreateForm = true),
-              backgroundColor: AppColors.primary,
-              icon: const Icon(Icons.add),
-              label: const Text("Create Group"),
+      bottomNavigationBar: !_showCreateForm
+          ? SafeArea(
+              minimum: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: SizedBox(
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: () => setState(() => _showCreateForm = true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: const Icon(Icons.add),
+                  label: const Text(
+                    'Create Group',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
             )
           : null,
     );
@@ -107,8 +122,9 @@ class _SewWithMePageState extends State<SewWithMePage> {
                 final openGroups = groups
                     .where(
                       (g) =>
-                          g.status == GroupOrderStatus.open ||
-                          g.status == GroupOrderStatus.full,
+                          g.effectiveStatus == GroupOrderStatus.open ||
+                          g.effectiveStatus == GroupOrderStatus.full ||
+                          g.effectiveStatus == GroupOrderStatus.closed,
                     )
                     .toList();
 
@@ -178,6 +194,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
   Widget _buildGroupCard(GroupOrder group) {
     final progress = group.members.length / group.maxParticipants;
     final daysLeft = group.deadline.difference(DateTime.now()).inDays;
+    final effectiveStatus = group.effectiveStatus;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -254,9 +271,13 @@ class _SewWithMePageState extends State<SewWithMePage> {
                           ),
                           const Spacer(),
                           Text(
-                            "${daysLeft}d left",
+                            effectiveStatus == GroupOrderStatus.closed
+                                ? 'Closed'
+                                : "${daysLeft}d left",
                             style: AppTextStyles.labelSmall.copyWith(
-                              color: daysLeft > 3
+                              color: effectiveStatus == GroupOrderStatus.closed
+                                  ? AppColors.textTertiary
+                                  : daysLeft > 3
                                   ? AppColors.primary
                                   : AppColors.coral,
                               fontWeight: FontWeight.w600,

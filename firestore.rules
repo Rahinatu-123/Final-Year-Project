@@ -167,11 +167,8 @@ service cloud.firestore {
       // Create: any authenticated user can create groups
       allow create: if request.auth != null;
       
-      // Update: creator, members, or assigned professional can update
-      allow update: if request.auth != null && 
-        (resource.data.createdById == request.auth.uid || 
-         request.resource.data.members.any(m, m.userId == request.auth.uid) ||
-         resource.data.professionalId == request.auth.uid);
+      // Update: authenticated users can join/update groups.
+      allow update: if request.auth != null;
       
       // Only creator can delete
       allow delete: if request.auth != null && resource.data.createdById == request.auth.uid;

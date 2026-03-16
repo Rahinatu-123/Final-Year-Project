@@ -17,6 +17,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
   bool _loading = true;
   bool _isConnected = false;
 
+  bool get _isProfessionalRole {
+    final role = (_userData?['role'] ?? '').toString().toLowerCase();
+    return role.contains('tailor') ||
+        role.contains('seamstress') ||
+        role.contains('fabric') ||
+        role.contains('seller');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -29,13 +37,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
           .collection('users')
           .doc(widget.uid)
           .get();
-        final data = doc.data();
+      final data = doc.data();
 
       final tailorDoc = await FirebaseFirestore.instance
           .collection('tailors')
           .doc(widget.uid)
           .get();
-        final tailorData = tailorDoc.data();
+      final tailorData = tailorDoc.data();
 
       // check if current user is connected to this profile
       final current = FirebaseAuth.instance.currentUser;
@@ -172,9 +180,9 @@ class _UserProfilePageState extends State<UserProfilePage> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                          SizedBox(
-                            height: 36,
-                            child: ElevatedButton(
+                        SizedBox(
+                          height: 36,
+                          child: ElevatedButton(
                             onPressed: _toggleFollow,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
@@ -194,6 +202,13 @@ class _UserProfilePageState extends State<UserProfilePage> {
                     const SizedBox(height: 20),
                     _buildBusinessInfoSection(),
                     const SizedBox(height: 20),
+                    if (_isProfessionalRole ||
+                        ((_tailorData?['portfolioImageUrls'] as List?)
+                                ?.isNotEmpty ??
+                            false)) ...[
+                      _buildPortfolioSection(),
+                      const SizedBox(height: 20),
+                    ],
                     const Divider(),
                     const SizedBox(height: 12),
                     Text('Posts', style: AppTextStyles.h4),
@@ -414,6 +429,163 @@ class _UserProfilePageState extends State<UserProfilePage> {
             Text('Email: $businessEmail', style: AppTextStyles.bodySmall),
         ],
       ),
+    );
+  }
+
+  Widget _buildPortfolioSection() {
+    final fallbackImages =
+        (_tailorData?['portfolioImageUrls'] as List<dynamic>? ?? [])
+            .map((e) => e.toString())
+            .where((url) => url.isNotEmpty)
+            .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Portfolio', style: AppTextStyles.h4),
+        const SizedBox(height: 12),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('tailor_portfolio')
+              .where('tailorId', isEqualTo: widget.uid)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SizedBox(
+                height: 120,
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+
+            final docs = snapshot.data?.docs ?? [];
+            docs.sort((a, b) {
+              final aTime = (a.data() as Map<String, dynamic>)['createdAt'];
+              final bTime = (b.data() as Map<String, dynamic>)['createdAt'];
+              final aTimestamp = aTime is Timestamp
+                  ? aTime
+                  : Timestamp.fromMillisecondsSinceEpoch(0);
+              final bTimestamp = bTime is Timestamp
+                  ? bTime
+                  : Timestamp.fromMillisecondsSinceEpoch(0);
+              return bTimestamp.compareTo(aTimestamp);
+            });
+
+            final collectionItems = docs
+                .map((doc) => doc.data() as Map<String, dynamic>)
+                .where((item) => (item['imageUrl'] ?? '').toString().isNotEmpty)
+                .toList();
+
+            final hasCollectionItems = collectionItems.isNotEmpty;
+            final hasFallbackItems = fallbackImages.isNotEmpty;
+            if (!hasCollectionItems && !hasFallbackItems) {
+              return Text(
+                'No portfolio items yet',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasCollectionItems)
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          childAspectRatio: 0.78,
+                        ),
+                    itemCount: collectionItems.length,
+                    itemBuilder: (context, index) {
+                      final item = collectionItems[index];
+                      final imageUrl = (item['imageUrl'] ?? '').toString();
+                      final description = (item['description'] ?? '')
+                          .toString();
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.surfaceVariant),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(10),
+                                  topRight: Radius.circular(10),
+                                ),
+                                child: Image.network(
+                                  imageUrl,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => Container(
+                                    color: Colors.grey.shade200,
+                                    child: const Center(
+                                      child: Icon(Icons.broken_image),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: Text(
+                                description.isEmpty
+                                    ? 'No description'
+                                    : description,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                if (hasFallbackItems && !hasCollectionItems)
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                        ),
+                    itemCount: fallbackImages.length,
+                    itemBuilder: (context, index) {
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          fallbackImages[index],
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(Icons.broken_image),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 }

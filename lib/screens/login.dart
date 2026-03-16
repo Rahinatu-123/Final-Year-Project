@@ -54,6 +54,11 @@ class _LoginPageState extends State<LoginPage> {
 
       if (userDoc.exists) {
         if (mounted) {
+          _showSuccess("Login successful");
+          await Future.delayed(const Duration(milliseconds: 650));
+
+          if (!mounted) return;
+
           // Pop to root. If auth state doesn't propagate, navigate directly
           debugPrint('login: userDoc found, popping to root');
           try {
@@ -85,6 +90,19 @@ class _LoginPageState extends State<LoginPage> {
       SnackBar(
         content: Text(message),
         backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppBorderRadius.sm),
+        ),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppBorderRadius.sm),

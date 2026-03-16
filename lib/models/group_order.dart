@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum GroupOrderType { sewing, fabric }
 
-enum GroupOrderStatus { open, full, inProgress, completed, cancelled }
+enum GroupOrderStatus { open, full, closed, inProgress, completed, cancelled }
 
 class GroupOrderMember {
   final String userId;
@@ -92,7 +92,26 @@ class GroupOrder {
 
   int get availableSpots => maxParticipants - members.length;
   bool get isFull => members.length >= maxParticipants;
+  bool get isExpired => deadline.isBefore(DateTime.now());
   int get pricedMembersCount => members.where((m) => m.isPriced).length;
+
+  GroupOrderStatus get effectiveStatus {
+    if (status == GroupOrderStatus.completed ||
+        status == GroupOrderStatus.cancelled ||
+        status == GroupOrderStatus.inProgress) {
+      return status;
+    }
+
+    if (status == GroupOrderStatus.closed || isExpired) {
+      return GroupOrderStatus.closed;
+    }
+
+    if (isFull) {
+      return GroupOrderStatus.full;
+    }
+
+    return GroupOrderStatus.open;
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -152,6 +171,8 @@ class GroupOrder {
     switch (status) {
       case 'full':
         return GroupOrderStatus.full;
+      case 'closed':
+        return GroupOrderStatus.closed;
       case 'inProgress':
         return GroupOrderStatus.inProgress;
       case 'completed':

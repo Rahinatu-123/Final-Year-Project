@@ -54,14 +54,23 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
         final group = snapshot.data!;
         final user = _auth.currentUser;
+        final effectiveStatus = group.effectiveStatus;
+        final daysLeft = group.deadline.difference(DateTime.now()).inDays;
         final isProfessional = user?.uid == group.professionalId;
         final isCreator = user?.uid == group.createdById;
+        final isGroupFull = effectiveStatus == GroupOrderStatus.full;
+        final isGroupClosed = effectiveStatus == GroupOrderStatus.closed;
         GroupOrderMember? userMember;
         try {
           userMember = group.members.firstWhere((m) => m.userId == user?.uid);
         } catch (e) {
           userMember = null;
         }
+
+        final canViewFullDetails =
+            isCreator || isProfessional || userMember != null;
+        final canLeaveGroup =
+            userMember != null && !isProfessional && !isCreator && daysLeft > 1;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -91,13 +100,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   padding: const EdgeInsets.all(8.0),
                   child: Chip(
                     label: Text(
-                      group.status.toString().split('.').last.toUpperCase(),
+                      effectiveStatus.toString().split('.').last.toUpperCase(),
                       style: const TextStyle(color: Colors.white),
                     ),
-                    backgroundColor: group.status == GroupOrderStatus.open
+                    backgroundColor: effectiveStatus == GroupOrderStatus.open
                         ? AppColors.primary
-                        : group.status == GroupOrderStatus.full
+                        : effectiveStatus == GroupOrderStatus.full
                         ? AppColors.coral
+                        : effectiveStatus == GroupOrderStatus.closed
+                        ? AppColors.textTertiary
                         : AppColors.success,
                   ),
                 ),
@@ -105,63 +116,347 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           ),
           body: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildGroupHeader(group),
-                const SizedBox(height: 32),
-                if (userMember != null && !isProfessional)
-                  Column(
+            child: canViewFullDetails
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildYourOrderCard(userMember),
+                      _buildGroupHeader(group),
                       const SizedBox(height: 32),
-                    ],
-                  ),
-                _buildMembersSection(group, isProfessional, user?.uid),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  height: 55,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GroupChatScreen(
-                            groupId: widget.groupId,
-                            groupName: group.name,
+                      if (userMember != null && !isProfessional)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildYourOrderCard(userMember),
+                            const SizedBox(height: 16),
+                            if (canLeaveGroup)
+                              SizedBox(
+                                width: double.infinity,
+                                height: 50,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _confirmLeaveGroup(group),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppColors.coral,
+                                    side: const BorderSide(
+                                      color: AppColors.coral,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.exit_to_app),
+                                  label: const Text(
+                                    'Leave Group',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            else if (!isCreator && daysLeft <= 1)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'You can only leave a group when more than 1 day remains before the join deadline.',
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      _buildMembersSection(group, isProfessional, user?.uid),
+                      const SizedBox(height: 32),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => GroupChatScreen(
+                                  groupId: widget.groupId,
+                                  groupName: group.name,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.message),
+                          label: const Text(
+                            'Go to Group Chat',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
                       ),
-                    ),
-                    icon: const Icon(Icons.message),
-                    label: const Text(
-                      'Go to Group Chat',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+                    ],
+                  )
+                : _buildNonMemberPreview(group, isGroupFull, isGroupClosed),
           ),
         );
       },
     );
   }
 
+  Widget _buildNonMemberPreview(
+    GroupOrder group,
+    bool isGroupFull,
+    bool isGroupClosed,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: AppColors.warmGradient,
+            borderRadius: BorderRadius.circular(AppBorderRadius.lg),
+            boxShadow: AppShadows.colored(AppColors.coral),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Created by ${group.createdByName}',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.92),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${group.members.length}/${group.maxParticipants} people joined',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.92),
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (group.description.trim().isNotEmpty) ...[
+          const Text(
+            'Description',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(group.description, style: AppTextStyles.bodyMedium),
+          const SizedBox(height: 24),
+        ],
+        if (isGroupClosed)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.textTertiary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.textTertiary.withOpacity(0.35),
+              ),
+            ),
+            child: const Text(
+              'This group is closed.',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else if (isGroupFull)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppColors.coral.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.coral.withOpacity(0.35)),
+            ),
+            child: const Text(
+              'This group is full. Create a new group.',
+              style: TextStyle(
+                color: AppColors.coral,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton(
+              onPressed: _auth.currentUser == null
+                  ? null
+                  : () => _joinGroup(group),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Join Group',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _joinGroup(GroupOrder group) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    if (group.effectiveStatus == GroupOrderStatus.closed) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This group is closed.'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+
+    if (group.members.length >= group.maxParticipants) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This group is full. Create a new group.'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await _groupOrderService.joinGroup(
+        groupId: group.id,
+        userId: user.uid,
+        userName: user.displayName ?? 'Unknown',
+        userImage: user.photoURL ?? '',
+        orderDescription: '',
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You joined the group successfully.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      setState(() {});
+    } catch (e) {
+      final lowerError = e.toString().toLowerCase();
+      final message = lowerError.contains('already joined')
+          ? 'You can only join this group once.'
+          : lowerError.contains('full')
+          ? 'This group is full. Create a new group.'
+          : 'Failed to join group: $e';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: AppColors.coral),
+      );
+    }
+  }
+
+  Future<void> _confirmLeaveGroup(GroupOrder group) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Leave Group'),
+        content: const Text('Are you sure you want to leave this group?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _leaveGroup(group);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.coral),
+            child: const Text('Leave'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _leaveGroup(GroupOrder group) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final daysLeft = group.deadline.difference(DateTime.now()).inDays;
+    if (daysLeft <= 1) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'You can only leave a group when more than 1 day remains before the join deadline.',
+          ),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await _groupOrderService.leaveGroup(groupId: group.id, userId: user.uid);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You left the group successfully.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to leave group: $e'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+    }
+  }
+
   Widget _buildGroupHeader(GroupOrder group) {
     final daysLeft = group.deadline.difference(DateTime.now()).inDays;
+    final effectiveStatus = group.effectiveStatus;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -206,7 +501,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: _buildHeaderStat('${daysLeft}d', 'Left')),
+              Expanded(
+                child: _buildHeaderStat(
+                  effectiveStatus == GroupOrderStatus.closed
+                      ? 'Closed'
+                      : '${daysLeft}d',
+                  effectiveStatus == GroupOrderStatus.closed
+                      ? 'Status'
+                      : 'Left',
+                ),
+              ),
             ],
           ),
           if (group.description.isNotEmpty) ...[
@@ -393,7 +697,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             itemCount: group.members.length,
             itemBuilder: (context, index) {
               final member = group.members[index];
-              return _buildMemberCard(member, isProfessional, group.id);
+              return _buildMemberCard(
+                member,
+                isProfessional,
+                group.id,
+                'Member ${index + 1}',
+              );
             },
           ),
       ],
@@ -404,6 +713,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     GroupOrderMember member,
     bool isProfessional,
     String groupId,
+    String displayName,
   ) {
     final isCurrentUser = member.userId == _auth.currentUser?.uid;
 
@@ -449,7 +759,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                     Row(
                       children: [
                         Text(
-                          member.userName,
+                          displayName,
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,

@@ -104,6 +104,11 @@ class GroupOrderService {
         );
       }
 
+      if (group != null &&
+          group.members.any((member) => member.userId == userId)) {
+        throw Exception('You have already joined this group.');
+      }
+
       if (group != null && group.isFull) {
         throw Exception('This group is full. You cannot join.');
       }
@@ -136,11 +141,47 @@ class GroupOrderService {
         senderId: 'system',
         senderName: 'System',
         senderImage: '',
-        message: '$userName joined the group',
+        message: 'A new member joined the group',
         isSystemMessage: true,
       );
     } catch (e) {
       throw Exception('Failed to join group: $e');
+    }
+  }
+
+  Future<void> leaveGroup({
+    required String groupId,
+    required String userId,
+  }) async {
+    try {
+      final group = await getGroupById(groupId);
+      if (group == null) throw Exception('Group not found');
+
+      final updatedMembers = group.members
+          .where((member) => member.userId != userId)
+          .toList();
+
+      if (updatedMembers.length == group.members.length) {
+        throw Exception('You are not a member of this group.');
+      }
+
+      await _firestore.collection(_groupsCollection).doc(groupId).update({
+        'members': updatedMembers.map((member) => member.toMap()).toList(),
+        'status': updatedMembers.length >= group.maxParticipants
+            ? 'full'
+            : 'open',
+      });
+
+      await addMessage(
+        groupId: groupId,
+        senderId: 'system',
+        senderName: 'System',
+        senderImage: '',
+        message: 'A member left the group',
+        isSystemMessage: true,
+      );
+    } catch (e) {
+      throw Exception('Failed to leave group: $e');
     }
   }
 
