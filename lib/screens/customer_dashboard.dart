@@ -230,56 +230,74 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
   }
 
   Widget _buildQuickActionsGrid(BuildContext context) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.4,
-      children: [
-        _buildActionCard(
+    final actions = [
+      _buildActionCard(
+        context,
+        "Generate\nMeasurements",
+        Icons.straighten,
+        AppColors.coral,
+        () => Navigator.push(
           context,
-          "Generate\nMeasurements",
-          Icons.straighten,
-          AppColors.coral,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MeasurementIndicationScreen(),
-            ),
+          MaterialPageRoute(
+            builder: (context) => const MeasurementIndicationScreen(),
           ),
         ),
-        _buildActionCard(
+      ),
+      _buildActionCard(
+        context,
+        "My\nChat",
+        Icons.search,
+        AppColors.accent,
+        () => Navigator.push(
           context,
-          "My\nChat",
-          Icons.search,
-          AppColors.accent,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const MutualConnectionsPage(),
-            ),
+          MaterialPageRoute(
+            builder: (context) => const MutualConnectionsPage(),
           ),
         ),
-        _buildActionCard(
+      ),
+      _buildActionCard(
+        context,
+        "Visualize\nStyle",
+        Icons.style,
+        AppColors.secondary,
+        () => Navigator.push(
           context,
-          "Visualize\nStyle",
-          Icons.style,
-          AppColors.secondary,
-          () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const VisualizeStylePage()),
+          MaterialPageRoute(builder: (context) => const VisualizeStylePage()),
+        ),
+      ),
+      _buildActionCard(
+        context,
+        "Group\nOrder",
+        Icons.people,
+        AppColors.gold,
+        () => _showGroupOrderDialog(),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const crossAxisSpacing = 16.0;
+        final itemWidth = (constraints.maxWidth - crossAxisSpacing) / 2;
+        final textScale = MediaQuery.textScalerOf(context)
+            .scale(1.0)
+            .clamp(1.0, 1.35);
+        final itemHeight = (itemWidth * 0.78 + (textScale - 1) * 18)
+            .clamp(128.0, 180.0)
+            .toDouble();
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: actions.length,
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: crossAxisSpacing,
+            mainAxisSpacing: 16,
+            mainAxisExtent: itemHeight,
           ),
-        ),
-        _buildActionCard(
-          context,
-          "Group\nOrder",
-          Icons.people,
-          AppColors.gold,
-          () => _showGroupOrderDialog(),
-        ),
-      ],
+          itemBuilder: (context, index) => actions[index],
+        );
+      },
     );
   }
 
@@ -301,7 +319,6 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Container(
               padding: const EdgeInsets.all(10),
@@ -311,12 +328,20 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
               ),
               child: Icon(icon, color: color, size: 24),
             ),
-            Text(
-              title,
-              style: AppTextStyles.labelLarge.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-                height: 1.3,
+            const SizedBox(height: 12),
+            Expanded(
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.labelLarge.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                  ),
+                ),
               ),
             ),
           ],

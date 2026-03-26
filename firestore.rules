@@ -212,6 +212,21 @@ service cloud.firestore {
       allow delete: if request.auth != null && resource.data.tailorId == request.auth.uid;
     }
 
+    // Secure client image shares used in chat support
+    match /secure_image_shares/{shareId} {
+      allow read: if request.auth != null &&
+        request.auth.uid in resource.data.participants;
+
+      allow create: if request.auth != null &&
+        request.auth.uid in request.resource.data.participants;
+
+      allow update: if request.auth != null &&
+        request.auth.uid in resource.data.participants;
+
+      allow delete: if request.auth != null &&
+        request.auth.uid in resource.data.participants;
+    }
+
     // Default: deny all other access
     match /{document=**} {
       allow read, write: if false;
