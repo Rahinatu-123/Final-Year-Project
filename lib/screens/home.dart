@@ -13,6 +13,7 @@ import 'my_shop.dart';
 import 'fabric_seller_orders.dart';
 import 'add_fabric_listing.dart';
 import 'package:video_player/video_player.dart';
+import '../services/profile_image_service.dart';
 
 class UniversalHome extends StatefulWidget {
   const UniversalHome({super.key});
@@ -180,8 +181,7 @@ class _UniversalHomeState extends State<UniversalHome> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
-        final TextEditingController commentController =
-            TextEditingController();
+        final TextEditingController commentController = TextEditingController();
         return Padding(
           padding: MediaQuery.of(context).viewInsets,
           child: SizedBox(
@@ -691,7 +691,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                       (tailor['name'] ?? '').toString().trim().isNotEmpty
                       ? tailor['name']
                       : (tailor['firstName'] ?? 'User');
-                  final profileImage = tailor['profileImage'] ?? '';
+                  final profileImage = resolveProfileImage(tailor);
                   final role = tailor['role'] ?? 'tailor';
                   final uid = tailors[index].id;
 

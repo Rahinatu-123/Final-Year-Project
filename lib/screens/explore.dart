@@ -8,6 +8,7 @@ import 'fabric_gallery.dart';
 import 'shop_gallery.dart';
 import 'chat.dart';
 import 'style_detail_page.dart';
+import '../services/profile_image_service.dart';
 
 class ExplorePage extends StatefulWidget {
   final bool filterByProfessionals;
@@ -401,7 +402,7 @@ class _ExplorePageState extends State<ExplorePage> {
                 (professional['name'] ?? '').toString().trim().isNotEmpty
                 ? professional['name']
                 : (professional['firstName'] ?? 'User');
-            final profileImage = professional['profileImage'] ?? '';
+            final profileImage = resolveProfileImage(professional);
             final role = professional['role'] ?? 'tailor';
             final uid = professionals[index].id;
             final businessName = professional['businessName'] ?? '';
@@ -995,7 +996,7 @@ class _ExplorePageState extends State<ExplorePage> {
 
                   final userData =
                       userSnapshot.data!.data() as Map<String, dynamic>;
-                  final profileImage = userData['profileImage'] ?? '';
+                  final profileImage = resolveProfileImage(userData);
                   final fullName = userData['fullName'] ?? connectionName;
 
                   return Padding(
@@ -1321,7 +1322,7 @@ class _ExplorePageState extends State<ExplorePage> {
 
                 final userData =
                     userSnapshot.data!.data() as Map<String, dynamic>;
-                final profileImage = userData['profileImage'] ?? '';
+                final profileImage = resolveProfileImage(userData);
                 final fullName = userData['fullName'] ?? connectionName;
 
                 return Padding(

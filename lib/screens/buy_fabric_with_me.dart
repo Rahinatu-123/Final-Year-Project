@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/group_order.dart';
 import '../services/group_order_service.dart';
+import '../services/profile_image_service.dart';
 import 'group_detail.dart';
 
 class BuyFabricWithMePage extends StatefulWidget {
@@ -390,10 +391,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
             boxShadow: AppShadows.soft,
           ),
           child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('users')
-                .where('role', isEqualTo: 'fabric_seller')
-                .snapshots(),
+            stream: _firestore.collection('users').snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
                 return const Padding(
@@ -405,7 +403,10 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
                 );
               }
 
-              final sellers = snapshot.data!.docs;
+              final sellers = snapshot.data!.docs.where((doc) {
+                final role = (doc['role'] ?? '').toString().toLowerCase();
+                return role.contains('fabric') || role.contains('seller');
+              }).toList();
 
               return DropdownButtonFormField<String>(
                 initialValue: _selectedSellerId,
@@ -434,7 +435,9 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
                           seller['fullName'] ??
                           seller['firstName'] ??
                           'Unknown';
-                      _selectedSellerImage = seller['profileImage'] ?? '';
+                      _selectedSellerImage = resolveProfileImage(
+                        seller.data() as Map<String, dynamic>,
+                      );
                     });
                   }
                 },

@@ -73,6 +73,8 @@ class _SignupPageState extends State<SignupPage> {
         'firstName': firstName,
         'lastName': lastName,
         'fullName': '$firstName $lastName',
+        'profileImage': '',
+        'profilePictureUrl': '',
         'role': _selectedRole,
 
         // 👇 Add default business fields for all users

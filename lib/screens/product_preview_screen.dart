@@ -6,6 +6,7 @@ import 'dart:io';
 import '../models/product.dart';
 import '../theme/app_theme.dart';
 import 'visualize_style.dart';
+import '../services/profile_image_service.dart';
 
 class ProductPreviewScreen extends StatefulWidget {
   final String name;
@@ -546,7 +547,7 @@ class _ProductPreviewScreenState extends State<ProductPreviewScreen> {
 
                   final userData =
                       userSnapshot.data!.data() as Map<String, dynamic>;
-                  final profileImage = userData['profileImage'] ?? '';
+                  final profileImage = resolveProfileImage(userData);
                   final fullName = userData['fullName'] ?? connectionName;
 
                   return Padding(

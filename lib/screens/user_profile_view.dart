@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
+import '../services/profile_image_service.dart';
 
 class UserProfilePage extends StatefulWidget {
   final String uid;
@@ -138,6 +139,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    final profileImage = resolveProfileImage(_userData);
+
     return Scaffold(
       appBar: AppBar(title: Text(_userData?['username'] ?? 'Profile')),
       body: _loading
@@ -152,12 +155,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       children: [
                         CircleAvatar(
                           radius: 36,
-                          backgroundImage:
-                              (_userData?['profileImage'] ?? '').isNotEmpty
-                              ? NetworkImage(_userData!['profileImage'])
-                                    as ImageProvider
+                          backgroundImage: profileImage.isNotEmpty
+                              ? NetworkImage(profileImage) as ImageProvider
                               : null,
-                          child: (_userData?['profileImage'] ?? '').isEmpty
+                          child: profileImage.isEmpty
                               ? const Icon(Icons.person, size: 36)
                               : null,
                         ),

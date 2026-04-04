@@ -10,6 +10,7 @@ import 'landing_page.dart';
 import 'create_post_screen.dart';
 import '../services/profile_service.dart';
 import '../services/cloudinary_service.dart';
+import '../services/profile_image_service.dart';
 
 class CustomerProfile extends StatefulWidget {
   const CustomerProfile({super.key});
@@ -117,7 +118,11 @@ class _CustomerProfileState extends State<CustomerProfile> {
               _businessLongitude = data['businessLongitude']?.toDouble();
             }
 
-            _photoUrl = data['profilePictureUrl'] ?? user.photoURL;
+            final resolvedImage = resolveProfileImage(
+              data,
+              fallback: user.photoURL ?? '',
+            );
+            _photoUrl = resolvedImage.isNotEmpty ? resolvedImage : null;
             _isLoading = false;
           });
         } else {
@@ -196,6 +201,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
               .collection('users')
               .doc(user.uid)
               .set({
+                'profileImage': uploadedUrl,
                 'profilePictureUrl': uploadedUrl,
                 'lastUpdated': Timestamp.now(),
               }, SetOptions(merge: true));
@@ -1285,9 +1291,7 @@ class _CustomerProfileState extends State<CustomerProfile> {
             return bMillis.compareTo(aMillis); // newest first
           });
 
-        return Column(
-          children: [...posts.map((post) => _buildPostItem(post))],
-        );
+        return Column(children: [...posts.map((post) => _buildPostItem(post))]);
       },
     );
   }

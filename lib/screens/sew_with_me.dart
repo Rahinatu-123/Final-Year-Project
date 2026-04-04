@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/group_order.dart';
 import '../services/group_order_service.dart';
+import '../services/profile_image_service.dart';
 import 'group_detail.dart';
 
 class SewWithMePage extends StatefulWidget {
@@ -435,7 +436,9 @@ class _SewWithMePageState extends State<SewWithMePage> {
                           tailor['fullName'] ??
                           tailor['firstName'] ??
                           'Unknown';
-                      _selectedTailorImage = tailor['profileImage'] ?? '';
+                      _selectedTailorImage = resolveProfileImage(
+                        tailor.data() as Map<String, dynamic>,
+                      );
                     });
                   }
                 },

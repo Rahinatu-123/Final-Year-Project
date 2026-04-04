@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../theme/app_theme.dart';
 import 'try_on.dart';
+import '../services/profile_image_service.dart';
 
 class StyleDetailPage extends StatefulWidget {
   final Map<String, dynamic> style;
@@ -208,9 +209,9 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                                     ),
                                   );
                                 } catch (e) {
-                                    if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
+                                  if (!context.mounted) return;
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
                                       content: Text('Error: ${e.toString()}'),
                                       backgroundColor: Colors.red,
                                     ),
@@ -312,7 +313,9 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        debugPrint('DEBUG: Snapshot has ${snapshot.data!.docs.length} documents');
+        debugPrint(
+          'DEBUG: Snapshot has ${snapshot.data!.docs.length} documents',
+        );
 
         // Filter out the current style using document ID (more reliable)
         final styles = snapshot.data!.docs.where((doc) {
@@ -323,7 +326,9 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
           return !isCurrentStyle;
         }).toList();
 
-        debugPrint('DEBUG: After filtering by ID: ${styles.length} styles found');
+        debugPrint(
+          'DEBUG: After filtering by ID: ${styles.length} styles found',
+        );
 
         if (styles.isEmpty) {
           // If filtering by ID found nothing, try filtering by name as fallback
@@ -431,7 +436,10 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.7),
+                  ],
                   stops: const [0.4, 1.0],
                 ),
               ),
@@ -600,7 +608,7 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
 
                   final userData =
                       userSnapshot.data!.data() as Map<String, dynamic>;
-                  final profileImage = userData['profileImage'] ?? '';
+                  final profileImage = resolveProfileImage(userData);
                   final fullName = userData['fullName'] ?? connectionName;
 
                   return Padding(
@@ -789,7 +797,11 @@ class _StyleDetailPageState extends State<StyleDetailPage> {
     final shareText = '$name\nBy $sellerName\n\n$description\n\n$imageUrl';
 
     SharePlus.instance.share(
-      ShareParams(text: shareText.isNotEmpty ? shareText : 'Check out this style on FashionHub'),
+      ShareParams(
+        text: shareText.isNotEmpty
+            ? shareText
+            : 'Check out this style on FashionHub',
+      ),
     );
   }
 

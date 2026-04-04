@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import 'chat.dart';
+import '../services/profile_image_service.dart';
 
 class FabricGalleryPage extends StatefulWidget {
   const FabricGalleryPage({
@@ -478,7 +479,7 @@ class _FabricGalleryPageState extends State<FabricGalleryPage> {
 
                   final userData =
                       userSnapshot.data!.data() as Map<String, dynamic>;
-                  final profileImage = userData['profileImage'] ?? '';
+                  final profileImage = resolveProfileImage(userData);
                   final fullName = userData['fullName'] ?? connectionName;
 
                   return Padding(
