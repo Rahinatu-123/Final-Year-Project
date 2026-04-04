@@ -4,6 +4,9 @@ String resolveProfileImage(Map<String, dynamic>? data, {String fallback = ''}) {
   final candidates = <dynamic>[
     data['profileImage'],
     data['profilePictureUrl'],
+    data['userProfilePicUrl'],
+    data['authorImage'],
+    data['userImage'],
     data['logoUrl'],
     data['photoURL'],
     data['photoUrl'],

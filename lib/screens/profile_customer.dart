@@ -509,93 +509,107 @@ class _CustomerProfileState extends State<CustomerProfile> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 24,
-          right: 24,
-          top: 24,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textTertiary.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+      builder: (modalContext) {
+        final mediaQuery = MediaQuery.of(modalContext);
+
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: mediaQuery.size.height * 0.9,
             ),
-            const SizedBox(height: 24),
-            Text("Change Password", style: AppTextStyles.h3),
-            const SizedBox(height: 8),
-            Text(
-              "Enter your current password and create a new one",
-              style: AppTextStyles.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-            _buildModalField(currentPass, "Current Password"),
-            _buildModalField(newPass, "New Password"),
-            _buildModalField(confirmPass, "Confirm New Password"),
-            const SizedBox(height: 24),
-            Container(
-              width: double.infinity,
-              height: 56,
-              decoration: BoxDecoration(
-                gradient: AppColors.warmGradient,
-                borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                boxShadow: AppShadows.colored(AppColors.coral),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppBorderRadius.md),
-                  ),
-                ),
-                onPressed: () {
-                  if (newPass.text == confirmPass.text &&
-                      newPass.text.length >= 6) {
-                    _changePassword(currentPass.text, newPass.text);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text(
-                          "Passwords must match and be 6+ chars",
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.textTertiary.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
                         ),
-                        backgroundColor: AppColors.error,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppBorderRadius.sm,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text("Change Password", style: AppTextStyles.h3),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Enter your current password and create a new one",
+                      style: AppTextStyles.bodyMedium,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildModalField(currentPass, "Current Password"),
+                    _buildModalField(newPass, "New Password"),
+                    _buildModalField(confirmPass, "Confirm New Password"),
+                    const SizedBox(height: 24),
+                    Container(
+                      width: double.infinity,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.warmGradient,
+                        borderRadius: BorderRadius.circular(AppBorderRadius.md),
+                        boxShadow: AppShadows.colored(AppColors.coral),
+                      ),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.md,
+                            ),
+                          ),
+                        ),
+                        onPressed: () {
+                          if (newPass.text == confirmPass.text &&
+                              newPass.text.length >= 6) {
+                            _changePassword(currentPass.text, newPass.text);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text(
+                                  "Passwords must match and be 6+ chars",
+                                ),
+                                backgroundColor: AppColors.error,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppBorderRadius.sm,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: Text(
+                          "Update Password",
+                          style: AppTextStyles.buttonLarge.copyWith(
+                            color: Colors.white,
                           ),
                         ),
                       ),
-                    );
-                  }
-                },
-                child: Text(
-                  "Update Password",
-                  style: AppTextStyles.buttonLarge.copyWith(
-                    color: Colors.white,
-                  ),
+                    ),
+                    SizedBox(height: mediaQuery.padding.bottom + 12),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

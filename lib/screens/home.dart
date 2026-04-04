@@ -177,15 +177,20 @@ class _UniversalHomeState extends State<UniversalHome> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) {
+      builder: (modalContext) {
         final TextEditingController commentController = TextEditingController();
-        return Padding(
-          padding: MediaQuery.of(context).viewInsets,
+        final mediaQuery = MediaQuery.of(modalContext);
+
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
           child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.6,
+            height: mediaQuery.size.height * 0.72,
             child: Column(
               children: [
                 Padding(
@@ -196,7 +201,7 @@ class _UniversalHomeState extends State<UniversalHome> {
                       Text('Comments', style: AppTextStyles.h4),
                       IconButton(
                         icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.pop(context),
+                        onPressed: () => Navigator.pop(modalContext),
                       ),
                     ],
                   ),
@@ -272,6 +277,7 @@ class _UniversalHomeState extends State<UniversalHome> {
                     ],
                   ),
                 ),
+                SizedBox(height: mediaQuery.padding.bottom),
               ],
             ),
           ),
@@ -928,11 +934,7 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
                     gradient: AppColors.warmGradient,
                     shape: BoxShape.circle,
                   ),
-                  child: const CircleAvatar(
-                    radius: 22,
-                    backgroundColor: AppColors.surfaceVariant,
-                    child: Icon(Icons.person, color: AppColors.textTertiary),
-                  ),
+                  child: _buildPostAuthorAvatar(post),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1041,6 +1043,43 @@ class _HomeFeedPageState extends State<HomeFeedPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPostAuthorAvatar(Map<String, dynamic> post) {
+    final authorId = (post['userId'] ?? '').toString();
+    final fallbackImage = resolveProfileImage(post);
+
+    if (authorId.isEmpty) {
+      return _buildAvatarCircle(fallbackImage);
+    }
+
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: FirebaseFirestore.instance
+          .collection('users')
+          .doc(authorId)
+          .get(),
+      builder: (context, snapshot) {
+        var imageUrl = fallbackImage;
+        if (snapshot.hasData && snapshot.data!.exists) {
+          imageUrl = resolveProfileImage(
+            snapshot.data!.data(),
+            fallback: fallbackImage,
+          );
+        }
+        return _buildAvatarCircle(imageUrl);
+      },
+    );
+  }
+
+  Widget _buildAvatarCircle(String imageUrl) {
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: AppColors.surfaceVariant,
+      backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+      child: imageUrl.isEmpty
+          ? const Icon(Icons.person, color: AppColors.textTertiary)
+          : null,
     );
   }
 
