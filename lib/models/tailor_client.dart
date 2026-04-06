@@ -9,6 +9,7 @@ class TailorClient {
   final String? email;
   final String? nameKey;
   final String? profileImageUrl;
+  final String? linkedUserId;
   final DateTime createdAt;
   final DateTime? lastOrderAt;
   final DateTime? updatedAt;
@@ -22,6 +23,7 @@ class TailorClient {
     this.email,
     this.nameKey,
     this.profileImageUrl,
+    this.linkedUserId,
     required this.createdAt,
     this.lastOrderAt,
     this.updatedAt,
@@ -37,6 +39,7 @@ class TailorClient {
       'phone': phone,
       'email': email,
       'profileImageUrl': profileImageUrl,
+      'linkedUserId': linkedUserId,
       'createdAt': Timestamp.fromDate(createdAt),
       'lastOrderAt': lastOrderAt != null
           ? Timestamp.fromDate(lastOrderAt!)
@@ -51,11 +54,13 @@ class TailorClient {
     return TailorClient(
       id: docId,
       tailorId: map['tailorId'] ?? '',
-      name: map['name'] ?? '',
-      phone: map['phone'],
-      email: map['email'],
+      name: (map['name'] ?? map['clientName'] ?? '').toString(),
+      phone: (map['phone'] ?? map['clientPhone'])?.toString(),
+      email: (map['email'] ?? map['clientEmail'])?.toString(),
       nameKey: map['nameKey'],
-      profileImageUrl: map['profileImageUrl'],
+      profileImageUrl:
+          (map['profileImageUrl'] ?? map['clientProfileImageUrl'])?.toString(),
+        linkedUserId: map['linkedUserId']?.toString(),
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       lastOrderAt: (map['lastOrderAt'] as Timestamp?)?.toDate(),
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),

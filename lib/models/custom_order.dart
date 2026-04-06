@@ -9,6 +9,7 @@ class CustomOrder {
   final String tailorId;
   final String clientName;
   final String? clientId; // null if manually added
+  final String? clientUserId; // linked app user id for synchronization
   final String style;
   final String? styleImageUrl;
   final double basePrice;
@@ -24,6 +25,7 @@ class CustomOrder {
     required this.tailorId,
     required this.clientName,
     this.clientId,
+    this.clientUserId,
     required this.style,
     this.styleImageUrl,
     required this.basePrice,
@@ -78,6 +80,7 @@ class CustomOrder {
       'tailorId': tailorId,
       'clientName': clientName,
       'clientId': clientId,
+      'clientUserId': clientUserId,
       'style': style,
       'styleImageUrl': styleImageUrl,
       'basePrice': basePrice,
@@ -99,6 +102,7 @@ class CustomOrder {
       tailorId: map['tailorId'] ?? '',
       clientName: map['clientName'] ?? '',
       clientId: map['clientId'],
+      clientUserId: map['clientUserId'],
       style: map['style'] ?? '',
       styleImageUrl: map['styleImageUrl'],
       basePrice: (map['basePrice'] ?? 0).toDouble(),
@@ -121,6 +125,7 @@ class CustomOrder {
     String? tailorId,
     String? clientName,
     String? clientId,
+    String? clientUserId,
     String? style,
     String? styleImageUrl,
     double? basePrice,
@@ -136,6 +141,7 @@ class CustomOrder {
       tailorId: tailorId ?? this.tailorId,
       clientName: clientName ?? this.clientName,
       clientId: clientId ?? this.clientId,
+      clientUserId: clientUserId ?? this.clientUserId,
       style: style ?? this.style,
       styleImageUrl: styleImageUrl ?? this.styleImageUrl,
       basePrice: basePrice ?? this.basePrice,

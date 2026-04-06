@@ -30,6 +30,7 @@ class CustomOrderService {
         tailorId: currentUser.uid,
         clientName: customOrder.clientName,
         clientId: customOrder.clientId,
+        clientUserId: customOrder.clientUserId,
         style: customOrder.style,
         basePrice: customOrder.basePrice,
         measurements: customOrder.measurements,

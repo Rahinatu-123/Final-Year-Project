@@ -59,7 +59,11 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
                     return false; // Don't show yourself
                   }
 
-                  final username = (doc['username'] ?? '')
+                  final userData = doc.data() as Map<String, dynamic>?;
+                  final username = (userData?['username'] ??
+                          userData?['fullName'] ??
+                          userData?['name'] ??
+                          '')
                       .toString()
                       .toLowerCase();
 
@@ -74,7 +78,13 @@ class _FindConnectionPageState extends State<FindConnectionPage> {
                   itemCount: users.length,
                   itemBuilder: (context, index) {
                     final user = users[index];
-                    final username = user['username'] ?? "No Name";
+                    final userData = user.data() as Map<String, dynamic>?;
+                    final username =
+                        (userData?['username'] ??
+                                userData?['fullName'] ??
+                                userData?['name'] ??
+                                "No Name")
+                            .toString();
 
                     return ListTile(
                       leading: const CircleAvatar(child: Icon(Icons.person)),

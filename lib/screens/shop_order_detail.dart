@@ -9,11 +9,13 @@ import '../theme/app_theme.dart';
 class ShopOrderDetailScreen extends StatefulWidget {
   final String orderId;
   final bool isForTailor;
+  final ShopOrder? initialOrder;
 
   const ShopOrderDetailScreen({
     super.key,
     required this.orderId,
     required this.isForTailor,
+    this.initialOrder,
   });
 
   @override
@@ -127,6 +129,7 @@ class _ShopOrderDetailScreenState extends State<ShopOrderDetailScreen> {
     }
   }
 
+
   String _statusToString(ShopOrderStatus status) {
     switch (status) {
       case ShopOrderStatus.pending:
@@ -179,11 +182,11 @@ class _ShopOrderDetailScreenState extends State<ShopOrderDetailScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!snapshot.hasData) {
+          final order = snapshot.data ?? widget.initialOrder;
+
+          if (order == null) {
             return const Center(child: Text('Order not found'));
           }
-
-          final order = snapshot.data!;
 
           return SingleChildScrollView(
             child: Column(

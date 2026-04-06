@@ -70,6 +70,7 @@ class GroupOrder {
   final DateTime createdAt;
   final DateTime deadline;
   final String? image;
+  final String? tailorOrderId;
 
   GroupOrder({
     required this.id,
@@ -88,6 +89,7 @@ class GroupOrder {
     required this.createdAt,
     required this.deadline,
     this.image,
+    this.tailorOrderId,
   });
 
   int get availableSpots => maxParticipants - members.length;
@@ -131,6 +133,7 @@ class GroupOrder {
       'createdAt': createdAt,
       'deadline': deadline,
       'image': image,
+      'tailorOrderId': tailorOrderId,
     };
   }
 
@@ -164,6 +167,9 @@ class GroupOrder {
           (map['deadline'] as Timestamp?)?.toDate() ??
           DateTime.now().add(const Duration(days: 7)),
       image: map['image'],
+      tailorOrderId: (map['tailorOrderId'] as String?)?.trim().isEmpty ?? true
+          ? null
+          : map['tailorOrderId'] as String,
     );
   }
 

@@ -56,8 +56,9 @@ class TryOnService {
 
   static Future<http.StreamedResponse> _sendTryOnRequest({
     required String baseUrl,
-    required String personImagePath,
-    required String garmentImagePath,
+    required Uint8List personImageBytes,
+    Uint8List? garmentImageBytes,
+    String? garmentImagePath,
     required String category,
     required int nSteps,
     required double imageScale,
@@ -72,43 +73,62 @@ class TryOnService {
     // Required header to bypass ngrok browser warning page
     request.headers['ngrok-skip-browser-warning'] = 'true';
 
-    // Attach person image (local file)
+    // Attach person image (from bytes to avoid cache cleanup issues)
     print('📤 Adding person image...');
-    request.files.add(await http.MultipartFile.fromPath('person', personImagePath));
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'person',
+        personImageBytes,
+        filename: 'person.jpg',
+      ),
+    );
 
-    // Attach garment image (handle both local files and URLs)
+    // Attach garment image (handle bytes, local file, or URLs)
     print('📤 Adding garment image...');
-    final isGarmentUrl =
-        garmentImagePath.startsWith('http://') ||
-        garmentImagePath.startsWith('https://');
-
-    if (isGarmentUrl) {
-      // Download URL and attach as bytes
-      print('🌐 Downloading garment from URL: $garmentImagePath');
-      late final Uint8List imageBytes;
-      try {
-        imageBytes = await http.readBytes(Uri.parse(garmentImagePath));
-      } catch (e) {
-        if (_isCertificateError(e)) {
-          throw _certificateException(
-            failingUrl: garmentImagePath,
-            originalError: e,
-          );
-        }
-        rethrow;
-      }
+    if (garmentImageBytes != null) {
+      // Use provided bytes
       request.files.add(
         http.MultipartFile.fromBytes(
           'garment',
-          imageBytes,
+          garmentImageBytes,
           filename: 'garment.jpg',
         ),
       );
+    } else if (garmentImagePath != null) {
+      final isGarmentUrl =
+          garmentImagePath.startsWith('http://') ||
+          garmentImagePath.startsWith('https://');
+
+      if (isGarmentUrl) {
+        // Download URL and attach as bytes
+        print('🌐 Downloading garment from URL: $garmentImagePath');
+        late final Uint8List imageBytes;
+        try {
+          imageBytes = await http.readBytes(Uri.parse(garmentImagePath));
+        } catch (e) {
+          if (_isCertificateError(e)) {
+            throw _certificateException(
+              failingUrl: garmentImagePath,
+              originalError: e,
+            );
+          }
+          rethrow;
+        }
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'garment',
+            imageBytes,
+            filename: 'garment.jpg',
+          ),
+        );
+      } else {
+        // Use local file path
+        request.files.add(
+          await http.MultipartFile.fromPath('garment', garmentImagePath),
+        );
+      }
     } else {
-      // Use local file path
-      request.files.add(
-        await http.MultipartFile.fromPath('garment', garmentImagePath),
-      );
+      throw Exception('Garment image must be provided as bytes or path');
     }
 
     // Optional parameters
@@ -178,12 +198,14 @@ class TryOnService {
   }
 
   // Send person + garment images and get the try-on result
-  // personImagePath  -- file path to person photo (local file)
-  // garmentImagePath -- file path to garment photo (local file or URL)
-  // category         -- 'Upper-body', 'Lower-body', or 'Dresses'
+  // personImageBytes  -- image bytes for person photo (required)
+  // garmentImageBytes -- image bytes for garment photo (optional if URL provided)
+  // garmentImagePath  -- URL or file path to garment (optional if bytes provided)
+  // category          -- 'Upper-body', 'Lower-body', or 'Dresses'
   static Future<Uint8List> tryOn({
-    required String personImagePath,
-    required String garmentImagePath,
+    required Uint8List personImageBytes,
+    Uint8List? garmentImageBytes,
+    String? garmentImagePath,
     String category = 'Upper-body',
     int nSteps = 20,
     double imageScale = 2.5,
@@ -191,8 +213,12 @@ class TryOnService {
     String resolution = '768x1024',
   }) async {
     print('🔍 TryOn Debug - Starting try-on process');
-    print('📁 Person image: $personImagePath');
-    print('📁 Garment image: $garmentImagePath');
+    print('👤 Person image: ${personImageBytes.length} bytes');
+    if (garmentImageBytes != null) {
+      print('👕 Garment image: ${garmentImageBytes.length} bytes');
+    } else if (garmentImagePath != null) {
+      print('👕 Garment path/URL: $garmentImagePath');
+    }
     print('👕 Category: $category');
 
     // Check model is ready before sending
@@ -205,7 +231,8 @@ class TryOnService {
       final baseUrl = await _resolveBaseUrl();
       var streamedResponse = await _sendTryOnRequest(
         baseUrl: baseUrl,
-        personImagePath: personImagePath,
+        personImageBytes: personImageBytes,
+        garmentImageBytes: garmentImageBytes,
         garmentImagePath: garmentImagePath,
         category: category,
         nSteps: nSteps,
@@ -238,7 +265,8 @@ class TryOnService {
             print('✅ Found updated api_url in Remote Config: $refreshedBaseUrl');
             streamedResponse = await _sendTryOnRequest(
               baseUrl: refreshedBaseUrl,
-              personImagePath: personImagePath,
+              personImageBytes: personImageBytes,
+              garmentImageBytes: garmentImageBytes,
               garmentImagePath: garmentImagePath,
               category: category,
               nSteps: nSteps,

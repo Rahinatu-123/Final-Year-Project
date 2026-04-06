@@ -1,9 +1,69 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/group_order.dart';
 
 class GroupOrderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
   static const String _groupsCollection = 'group_orders';
+
+  String _directChatId(String uidA, String uidB) {
+    final ids = [uidA, uidB]..sort();
+    return '${ids[0]}_${ids[1]}';
+  }
+
+  bool _isGroupFull(GroupOrder group) {
+    return group.isFull || group.status == GroupOrderStatus.full;
+  }
+
+  Future<void> _ensurePrivateChatsForMembers({
+    required GroupOrder group,
+    required String orderId,
+  }) async {
+    final members = group.members
+        .where(
+          (member) =>
+              member.userId.isNotEmpty && member.userId != group.professionalId,
+        )
+        .toList();
+
+    if (members.isEmpty) return;
+
+    final batch = _firestore.batch();
+    for (final member in members) {
+      final chatId = _directChatId(group.professionalId, member.userId);
+      final chatRef = _firestore.collection('chats').doc(chatId);
+
+      batch.set(chatRef, {
+        'participants': [group.professionalId, member.userId],
+        'participantNames': {
+          group.professionalId: group.professionalName,
+          member.userId: member.userName,
+        },
+        'requestStatus': 'accepted',
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastMessage':
+            'Group ${group.name} is full. Order #$orderId has been created.',
+      }, SetOptions(merge: true));
+
+      final messageRef = chatRef
+          .collection('messages')
+          .doc('group_full_${group.id}');
+      batch.set(messageRef, {
+        'senderId': group.professionalId,
+        'text':
+            'Group ${group.name} is full. Your order is now being processed.',
+        'type': 'group_order_created',
+        'orderId': orderId,
+        'groupOrderId': group.id,
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    await batch.commit();
+  }
 
   // Delete a group (only creator can delete)
   Future<void> deleteGroup(String groupId) async {
@@ -304,5 +364,161 @@ class GroupOrderService {
     } catch (e) {
       throw Exception('Failed to update status: $e');
     }
+  }
+
+  Future<void> updateGroupDetails({
+    required String groupId,
+    String? name,
+    String? description,
+    DateTime? deadline,
+    int? maxParticipants,
+    String? image,
+  }) async {
+    try {
+      final updates = <String, dynamic>{};
+
+      if (name != null) {
+        updates['name'] = name.trim();
+      }
+      if (description != null) {
+        updates['description'] = description.trim();
+      }
+      if (deadline != null) {
+        updates['deadline'] = deadline;
+      }
+      if (maxParticipants != null) {
+        updates['maxParticipants'] = maxParticipants;
+      }
+      if (image != null) {
+        updates['image'] = image;
+      }
+
+      if (updates.isEmpty) return;
+
+      await _firestore.collection(_groupsCollection).doc(groupId).update({
+        ...updates,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update group details: $e');
+    }
+  }
+
+  // Manual fallback for Spark plan: professional converts full group into order.
+  Future<String> createTailorOrderFromFullGroup(String groupId) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('You must be signed in to create a group order.');
+    }
+
+    late GroupOrder group;
+    var createdNow = false;
+
+    final orderId = await _firestore.runTransaction<String>((
+      transaction,
+    ) async {
+      final groupRef = _firestore.collection(_groupsCollection).doc(groupId);
+      final snapshot = await transaction.get(groupRef);
+      if (!snapshot.exists) {
+        throw Exception('Group not found.');
+      }
+
+      final data = snapshot.data()!;
+      group = GroupOrder.fromMap(data, snapshot.id);
+
+      if (group.professionalId != currentUser.uid) {
+        throw Exception(
+          'Only the selected professional can create this order.',
+        );
+      }
+
+      if (!_isGroupFull(group)) {
+        throw Exception('This group is not full yet.');
+      }
+
+      final existingOrderId = (data['tailorOrderId'] ?? '').toString().trim();
+      if (existingOrderId.isNotEmpty) {
+        return existingOrderId;
+      }
+
+      final now = DateTime.now();
+      final dueDate = group.deadline.isAfter(now)
+          ? group.deadline.add(const Duration(days: 14))
+          : now.add(const Duration(days: 14));
+      final daysToDeliver = dueDate.difference(now).inDays <= 0
+          ? 7
+          : dueDate.difference(now).inDays;
+
+      final memberDetails = group.members
+          .map(
+            (member) => {
+              'userId': member.userId,
+              'userName': member.userName,
+              'orderDescription': member.orderDescription,
+              'basePrice': member.basePrice,
+            },
+          )
+          .toList();
+
+      final pricedValues = group.members
+          .where((member) => member.basePrice != null && member.basePrice! > 0)
+          .map((member) => member.basePrice!)
+          .toList();
+
+      final averagePrice = pricedValues.isEmpty
+          ? 0.0
+          : pricedValues.reduce((a, b) => a + b) / pricedValues.length;
+
+      final orderRef = _firestore.collection('custom_orders').doc();
+      transaction.set(orderRef, {
+        'tailorId': group.professionalId,
+        'clientName': 'Group: ${group.name}',
+        'clientUserId': null,
+        'style':
+            '${group.type.toString().split('.').last.toUpperCase()} Group Order',
+        'styleImageUrl': group.image,
+        'basePrice': averagePrice,
+        'measurements': jsonEncode({
+          'groupOrderId': group.id,
+          'groupName': group.name,
+          'type': group.type.toString().split('.').last,
+          'members': memberDetails,
+        }),
+        'daysToDeliver': daysToDeliver,
+        'status': 'active',
+        'createdAt': Timestamp.fromDate(now),
+        'dueDate': Timestamp.fromDate(dueDate),
+        'source': 'manual_group_conversion',
+        'groupOrderId': group.id,
+        'groupName': group.name,
+        'memberCount': group.members.length,
+        'memberNames': group.members.map((m) => m.userName).toList(),
+      });
+
+      transaction.update(groupRef, {
+        'status': 'inProgress',
+        'tailorOrderId': orderRef.id,
+        'tailorOrderCreatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      createdNow = true;
+      return orderRef.id;
+    });
+
+    if (createdNow) {
+      await _ensurePrivateChatsForMembers(group: group, orderId: orderId);
+      await addMessage(
+        groupId: group.id,
+        senderId: 'system',
+        senderName: 'System',
+        senderImage: '',
+        message:
+            'Group is full. Order #$orderId has been created by ${group.professionalName}.',
+        isSystemMessage: true,
+      );
+    }
+
+    return orderId;
   }
 }

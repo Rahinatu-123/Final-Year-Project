@@ -18,7 +18,9 @@ class _TryOnScreenState extends State<TryOnScreen> {
   final ImagePicker _picker = ImagePicker();
 
   String? _personImagePath;
+  Uint8List? _personImageBytes;
   String? _garmentImagePath;
+  Uint8List? _garmentImageBytes;
   Uint8List? _resultImageBytes;
   bool _isLoading = false;
   String _category = 'Upper-body';
@@ -28,34 +30,54 @@ class _TryOnScreenState extends State<TryOnScreen> {
   void initState() {
     super.initState();
     // Pre-populate person image if passed from visualize_style
-
     if (widget.personImagePath != null) {
-      _personImagePath = widget.personImagePath;
-
-      // Verify file exists
-      final file = File(_personImagePath!);
-
-      if (!file.existsSync()) {
-        // File does not exist at path
-      }
+      _loadPersonImage(widget.personImagePath!);
     }
 
     // Pre-populate garment image if passed from style detail or gallery
     if (widget.garmentImagePath != null) {
-      _garmentImagePath = widget.garmentImagePath;
-
-      final isUrl =
-          _garmentImagePath!.startsWith('http://') ||
-          _garmentImagePath!.startsWith('https://');
-
-      if (isUrl) {
-        // Garment is a URL
+      if (widget.garmentImagePath!.startsWith('http://') ||
+          widget.garmentImagePath!.startsWith('https://')) {
+        _garmentImagePath = widget.garmentImagePath;
       } else {
-        final file = File(_garmentImagePath!);
-        if (!file.existsSync()) {
-          // Garment file exists check
-        }
+        _loadGarmentImage(widget.garmentImagePath!);
       }
+    }
+  }
+
+  /// Load person image from file path and read into memory
+  Future<void> _loadPersonImage(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        setState(() {
+          _personImagePath = filePath;
+          _personImageBytes = bytes;
+        });
+      } else {
+        print('⚠️ Person image file not found: $filePath');
+      }
+    } catch (e) {
+      print('❌ Error loading person image: $e');
+    }
+  }
+
+  /// Load garment image from file path and read into memory
+  Future<void> _loadGarmentImage(String filePath) async {
+    try {
+      final file = File(filePath);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        setState(() {
+          _garmentImagePath = filePath;
+          _garmentImageBytes = bytes;
+        });
+      } else {
+        print('⚠️ Garment image file not found: $filePath');
+      }
+    } catch (e) {
+      print('❌ Error loading garment image: $e');
     }
   }
 
@@ -66,12 +88,12 @@ class _TryOnScreenState extends State<TryOnScreen> {
       imageQuality: 90,
     );
     if (file != null) {
+      if (isPerson) {
+        await _loadPersonImage(file.path);
+      } else {
+        await _loadGarmentImage(file.path);
+      }
       setState(() {
-        if (isPerson) {
-          _personImagePath = file.path;
-        } else {
-          _garmentImagePath = file.path;
-        }
         _resultImageBytes = null;
         _errorMessage = null;
       });
@@ -79,10 +101,18 @@ class _TryOnScreenState extends State<TryOnScreen> {
   }
 
   Future<void> _runTryOn() async {
-    if (_personImagePath == null || _garmentImagePath == null) {
+    // Check person image is available
+    if (_personImageBytes == null) {
       setState(
-        () =>
-            _errorMessage = 'Please select both a person and a garment image.',
+        () => _errorMessage = 'Please select a person image.',
+      );
+      return;
+    }
+
+    // Check garment image is available (either bytes or URL path)
+    if (_garmentImageBytes == null && _garmentImagePath == null) {
+      setState(
+        () => _errorMessage = 'Please select a garment image.',
       );
       return;
     }
@@ -95,8 +125,9 @@ class _TryOnScreenState extends State<TryOnScreen> {
 
     try {
       final bytes = await TryOnService.tryOn(
-        personImagePath: _personImagePath!,
-        garmentImagePath: _garmentImagePath!,
+        personImageBytes: _personImageBytes!,
+        garmentImageBytes: _garmentImageBytes,
+        garmentImagePath: _garmentImagePath,
         category: _category,
       );
       setState(() => _resultImageBytes = bytes);

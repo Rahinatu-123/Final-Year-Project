@@ -948,24 +948,30 @@ class _CustomerProfileState extends State<CustomerProfile> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.business,
-                                color: AppColors.primary,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _businessSectionTitle,
-                                style: AppTextStyles.h4.copyWith(
-                                  color: AppColors.textPrimary,
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.business,
+                                  color: AppColors.primary,
+                                  size: 20,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _businessSectionTitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTextStyles.h4.copyWith(
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
+                          const SizedBox(width: 8),
                           TextButton.icon(
                             onPressed: _showEditBusinessInfoDialog,
                             icon: const Icon(Icons.edit_outlined, size: 16),
@@ -987,6 +993,8 @@ class _CustomerProfileState extends State<CustomerProfile> {
                         const SizedBox(height: 4),
                         Text(
                           _businessName!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: AppTextStyles.bodyLarge.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
@@ -1015,7 +1023,12 @@ class _CustomerProfileState extends State<CustomerProfile> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(_businessAddress!, style: AppTextStyles.bodyLarge),
+                        Text(
+                          _businessAddress!,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodyLarge,
+                        ),
                         const SizedBox(height: 12),
                       ],
 
@@ -1041,9 +1054,13 @@ class _CustomerProfileState extends State<CustomerProfile> {
                                 color: AppColors.textSecondary,
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                _businessPhone!,
-                                style: AppTextStyles.bodyMedium,
+                              Expanded(
+                                child: Text(
+                                  _businessPhone!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTextStyles.bodyMedium,
+                                ),
                               ),
                             ],
                           ),
@@ -1062,6 +1079,8 @@ class _CustomerProfileState extends State<CustomerProfile> {
                                 Expanded(
                                   child: Text(
                                     _businessEmail!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: AppTextStyles.bodyMedium,
                                   ),
                                 ),

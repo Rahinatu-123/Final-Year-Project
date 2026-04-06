@@ -19,6 +19,31 @@ class MutualConnectionsPage extends StatefulWidget {
 class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
   final currentUser = FirebaseAuth.instance.currentUser;
 
+  Future<Map<String, QueryDocumentSnapshot<Map<String, dynamic>>>>
+  _fetchUsersByIds(List<String> userIds) async {
+    final result = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    if (userIds.isEmpty) return result;
+
+    const chunkSize = 10;
+    for (var i = 0; i < userIds.length; i += chunkSize) {
+      final end = (i + chunkSize > userIds.length)
+          ? userIds.length
+          : i + chunkSize;
+      final chunk = userIds.sublist(i, end);
+
+      final userSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      for (final userDoc in userSnapshot.docs) {
+        result[userDoc.id] = userDoc;
+      }
+    }
+
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,12 +74,12 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
 
             // Chat list
             Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: _getMutualConnections(),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection('chats')
+                    .where('participants', arrayContains: currentUser?.uid)
+                    .snapshots(),
                 builder: (context, snapshot) {
-                  // Debug: Print current user ID
-                  print('Current user ID: ${currentUser?.uid}');
-
                   if (!snapshot.hasData) {
                     return Center(
                       child: CircularProgressIndicator(
@@ -64,33 +89,122 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
                     );
                   }
 
-                  final mutualUsers = snapshot.data!.docs.where((doc) {
-                    return doc.id != currentUser?.uid; // Don't show yourself
-                  }).toList();
-
-                  print(
-                    'Number of mutual connections found: ${mutualUsers.length}',
-                  );
-
-                  if (mutualUsers.isEmpty) {
+                  final chats = snapshot.data?.docs ?? [];
+                  if (chats.isEmpty) {
                     return _buildEmptyState();
                   }
 
-                  return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: mutualUsers.length,
-                    itemBuilder: (context, index) {
-                      var userDoc = mutualUsers[index];
-                      var userData = userDoc.data() as Map<String, dynamic>;
+                  final chatByOtherUser = <String, Map<String, dynamic>>{};
+                  final otherUserIds = <String>{};
 
-                      // Debug: Print user data
-                      print('User ${index + 1}: ${userDoc.id} - $userData');
+                  for (final chatDoc in chats) {
+                    final chatData = chatDoc.data();
+                    final participants =
+                        (chatData['participants'] as List<dynamic>? ?? [])
+                            .map((e) => e.toString())
+                            .toList();
 
-                      return _buildChatTile(
-                        context,
-                        userDoc.id,
-                        userData,
-                        false, // Will calculate unread count
+                    String? otherUserId;
+                    for (final participant in participants) {
+                      if (participant != currentUser?.uid) {
+                        otherUserId = participant;
+                        break;
+                      }
+                    }
+
+                    if (otherUserId == null || otherUserId.isEmpty) {
+                      continue;
+                    }
+
+                    otherUserIds.add(otherUserId);
+
+                    final existing = chatByOtherUser[otherUserId];
+                    final existingMs =
+                        (existing?['updatedAt'] as Timestamp?)
+                            ?.millisecondsSinceEpoch ??
+                        0;
+                    final currentMs =
+                        (chatData['updatedAt'] as Timestamp?)
+                            ?.millisecondsSinceEpoch ??
+                        0;
+
+                    if (existing == null || currentMs > existingMs) {
+                      chatByOtherUser[otherUserId] = chatData;
+                    }
+                  }
+
+                  if (otherUserIds.isEmpty) {
+                    return _buildEmptyState();
+                  }
+
+                  return FutureBuilder<
+                    Map<String, QueryDocumentSnapshot<Map<String, dynamic>>>
+                  >(
+                    future: _fetchUsersByIds(otherUserIds.toList()),
+                    builder: (context, userSnapshot) {
+                      if (!userSnapshot.hasData) {
+                        return Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                            strokeWidth: 3,
+                          ),
+                        );
+                      }
+
+                      final usersById = userSnapshot.data ??
+                          <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+
+                      final sortedUserIds = otherUserIds.toList()
+                        ..sort((a, b) {
+                          final aData =
+                              chatByOtherUser[a] ?? const <String, dynamic>{};
+                          final bData =
+                              chatByOtherUser[b] ?? const <String, dynamic>{};
+
+                          final aMs =
+                              (aData['updatedAt'] as Timestamp?)
+                                  ?.millisecondsSinceEpoch ??
+                              0;
+                          final bMs =
+                              (bData['updatedAt'] as Timestamp?)
+                                  ?.millisecondsSinceEpoch ??
+                              0;
+
+                          return bMs.compareTo(aMs);
+                        });
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        itemCount: sortedUserIds.length,
+                        itemBuilder: (context, index) {
+                          final userId = sortedUserIds[index];
+                          final userDoc = usersById[userId];
+                          final userData = userDoc?.data() ??
+                              <String, dynamic>{'username': 'Unknown User'};
+                          final chatData =
+                              chatByOtherUser[userId] ??
+                              const <String, dynamic>{};
+
+                          final lastMessage =
+                              (chatData['lastMessage'] ?? 'Tap to start chatting')
+                                  .toString();
+                          final lastMessageTime =
+                              _formatTimestamp(chatData['updatedAt'] as Timestamp?);
+                          final unreadRaw =
+                              (chatData['unreadCount'] as Map<String, dynamic>?) ??
+                              const <String, dynamic>{};
+                          final unreadCount = (unreadRaw[currentUser?.uid] ?? 0)
+                              as int;
+
+                          return _buildChatTile(
+                            context,
+                            userId,
+                            userData,
+                            lastMessage: lastMessage,
+                            lastMessageTime: lastMessageTime,
+                            unreadCount: unreadCount,
+                          );
+                        },
                       );
                     },
                   );
@@ -136,174 +250,154 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
     BuildContext context,
     String userId,
     Map<String, dynamic> userData,
-    bool hasUnread,
+    {
+    required String lastMessage,
+    required String lastMessageTime,
+    required int unreadCount,
+  }
   ) {
     final username = userData['username'] ?? "Unknown User";
     final profilePictureUrl = userData['profilePictureUrl'];
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('chats')
-          .where('participants', arrayContains: currentUser?.uid)
-          .snapshots(),
-      builder: (context, chatSnapshot) {
-        String lastMessage = "Tap to start chatting";
-        String lastMessageTime = "Now";
-        int unreadCount = 0;
-
-        if (chatSnapshot.hasData) {
-          for (final chatDoc in chatSnapshot.data!.docs) {
-            final chatData = chatDoc.data() as Map<String, dynamic>;
-            final participants =
-                chatData['participants'] as List<dynamic>? ?? [];
-
-            if (participants.contains(userId)) {
-              lastMessage = chatData['lastMessage'] ?? "Tap to start chatting";
-              lastMessageTime = _formatTimestamp(chatData['updatedAt']);
-              unreadCount = chatData['unreadCount']?[currentUser?.uid] ?? 0;
-              break;
-            }
-          }
-        }
-
-        return GestureDetector(
-          onTap: () {
-            // Create or open chat with this user
-            _createOrOpenChat(userId, username);
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(AppBorderRadius.md),
-              boxShadow: AppShadows.soft,
-              border: unreadCount > 0
-                  ? Border.all(
-                      color: AppColors.primary.withOpacity(0.3),
-                      width: 1,
-                    )
-                  : null,
-            ),
-            child: Row(
+    return GestureDetector(
+      onTap: () {
+        // Create or open chat with this user
+        _createOrOpenChat(userId, username);
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.md),
+          boxShadow: AppShadows.soft,
+          border: unreadCount > 0
+              ? Border.all(
+                  color: AppColors.primary.withOpacity(0.3),
+                  width: 1,
+                )
+              : null,
+        ),
+        child: Row(
+          children: [
+            // Avatar with online indicator
+            Stack(
               children: [
-                // Avatar with online indicator
-                Stack(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.warmGradient,
-                        shape: BoxShape.circle,
-                      ),
-                      child: CircleAvatar(
-                        radius: 26,
-                        backgroundImage:
-                            profilePictureUrl != null &&
-                                profilePictureUrl.isNotEmpty
-                            ? NetworkImage(profilePictureUrl!)
-                            : null,
-                        backgroundColor: AppColors.surfaceVariant,
-                        child:
-                            profilePictureUrl == null ||
-                                profilePictureUrl.isEmpty
-                            ? const Icon(
-                                Icons.person,
-                                color: AppColors.textTertiary,
-                              )
-                            : null,
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 2,
-                      right: 2,
-                      child: Container(
-                        width: 14,
-                        height: 14,
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.surface,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.warmGradient,
+                    shape: BoxShape.circle,
+                  ),
+                  child: CircleAvatar(
+                    radius: 26,
+                    backgroundImage:
+                        profilePictureUrl != null && profilePictureUrl.isNotEmpty
+                        ? NetworkImage(profilePictureUrl!)
+                        : null,
+                    backgroundColor: AppColors.surfaceVariant,
+                    child:
+                        profilePictureUrl == null || profilePictureUrl.isEmpty
+                        ? const Icon(
+                            Icons.person,
+                            color: AppColors.textTertiary,
+                          )
+                        : null,
+                  ),
                 ),
-                const SizedBox(width: 14),
-
-                // User info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            username,
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          Text(
-                            lastMessageTime,
-                            style: AppTextStyles.labelSmall,
-                          ),
-                        ],
+                Positioned(
+                  bottom: 2,
+                  right: 2,
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.surface,
+                        width: 2,
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              lastMessage,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: unreadCount > 0
-                                    ? AppColors.textPrimary
-                                    : AppColors.textTertiary,
-                                fontWeight: unreadCount > 0
-                                    ? FontWeight.w500
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                          if (unreadCount > 0) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: AppColors.warmGradient,
-                                borderRadius: BorderRadius.circular(
-                                  AppBorderRadius.xl,
-                                ),
-                              ),
-                              child: Text(
-                                unreadCount.toString(),
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 14),
+
+            // User info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodyLarge.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        lastMessageTime,
+                        style: AppTextStyles.labelSmall,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          lastMessage,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: unreadCount > 0
+                                ? AppColors.textPrimary
+                                : AppColors.textTertiary,
+                            fontWeight: unreadCount > 0
+                                ? FontWeight.w500
+                                : FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                      if (unreadCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.warmGradient,
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.xl,
+                            ),
+                          ),
+                          child: Text(
+                            unreadCount.toString(),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -389,7 +483,7 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
               ),
               const SizedBox(height: 28),
               Text(
-                "No Mutual Connections Yet",
+                "No Conversations Yet",
                 style: AppTextStyles.h3.copyWith(
                   color: AppColors.textPrimary,
                   fontWeight: FontWeight.w700,
@@ -398,7 +492,7 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
               ),
               const SizedBox(height: 12),
               Text(
-                "Start conversations by connecting with other tailors, seamstresses, and fabric sellers in your community.",
+                "Start a conversation from a profile or your clients list. Your chats will appear here automatically.",
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                   height: 1.5,
@@ -507,38 +601,4 @@ class _MutualConnectionsPageState extends State<MutualConnectionsPage> {
   }
 
   // ================= GET MUTUAL CONNECTIONS =================
-
-  Stream<QuerySnapshot> _getMutualConnections() {
-    if (currentUser == null) return const Stream.empty();
-
-    // Get users that current user is connected with
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(currentUser!.uid)
-        .collection('connections')
-        .snapshots()
-        .asyncExpand((connectionsSnapshot) async* {
-          // Get list of user IDs that current user is connected with
-          final connectedIds = connectionsSnapshot.docs
-              .map((doc) => doc.id)
-              .toList();
-
-          if (connectedIds.isEmpty) {
-            // Return empty result using a condition that won't match
-            final emptySnap = await FirebaseFirestore.instance
-                .collection('users')
-                .where(FieldPath.documentId, isEqualTo: '__nonexistent__')
-                .get();
-            yield emptySnap;
-            return;
-          }
-
-          // Return the connected users' full documents
-          final result = await FirebaseFirestore.instance
-              .collection('users')
-              .where(FieldPath.documentId, whereIn: connectedIds)
-              .get();
-          yield result;
-        });
-  }
 }

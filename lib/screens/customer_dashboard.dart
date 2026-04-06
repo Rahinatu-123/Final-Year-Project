@@ -88,7 +88,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                   ),
                   const SizedBox(height: 12),
                   StreamBuilder<List<ShopOrder>>(
-                    stream: _orderService.getCustomerOrdersStream(
+                    stream: _orderService.getCustomerOrdersIncludingCustomStream(
                       FirebaseAuth.instance.currentUser?.uid ?? '',
                     ),
                     builder: (context, snapshot) {
@@ -849,7 +849,11 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
           context,
           MaterialPageRoute(
             builder: (context) =>
-                ShopOrderDetailScreen(orderId: order.id, isForTailor: false),
+                ShopOrderDetailScreen(
+                  orderId: order.id,
+                  isForTailor: false,
+                  initialOrder: order,
+                ),
           ),
         );
       },
@@ -1089,7 +1093,7 @@ class _CustomerOrdersListScreenState extends State<CustomerOrdersListScreen> {
         foregroundColor: AppColors.textPrimary,
       ),
       body: StreamBuilder<List<ShopOrder>>(
-        stream: _orderService.getCustomerOrdersStream(
+        stream: _orderService.getCustomerOrdersIncludingCustomStream(
           FirebaseAuth.instance.currentUser?.uid ?? '',
         ),
         builder: (context, snapshot) {
@@ -1159,6 +1163,7 @@ class _CustomerOrdersListScreenState extends State<CustomerOrdersListScreen> {
                       builder: (context) => ShopOrderDetailScreen(
                         orderId: order.id,
                         isForTailor: false,
+                        initialOrder: order,
                       ),
                     ),
                   );

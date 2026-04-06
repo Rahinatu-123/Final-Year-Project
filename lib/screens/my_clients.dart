@@ -13,6 +13,7 @@ import '../services/fabric_seller_service.dart';
 import '../theme/app_theme.dart';
 import 'orders.dart';
 import 'style_gallery.dart';
+import 'chat.dart';
 
 class MyClientsScreen extends StatefulWidget {
   final String tailorId;
@@ -128,6 +129,47 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
     ).then((_) => _loadClients());
   }
 
+  Future<void> _openClientChat(TailorClient client) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    final linkedUserId = (client.linkedUserId ?? '').trim();
+    if (linkedUserId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This client is not linked to an app user. Edit or recreate with selected app user.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final ids = [currentUser.uid, linkedUserId]..sort();
+    final chatId = '${ids[0]}_${ids[1]}';
+
+    await FirebaseFirestore.instance.collection('chats').doc(chatId).set({
+      'participants': [currentUser.uid, linkedUserId],
+      'participantNames': {
+        currentUser.uid: widget.tailorName,
+        linkedUserId: client.name,
+      },
+      'requestStatus': 'accepted',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastMessage': 'Tap to start chatting',
+    }, SetOptions(merge: true));
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(chatId: chatId, otherUserName: client.name),
+      ),
+    );
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -177,6 +219,7 @@ class _MyClientsScreenState extends State<MyClientsScreen> {
                   client: clients[index],
                   orderCount: _clientOrderCounts[clients[index].id] ?? 0,
                   onTap: () => _openClientOrders(clients[index]),
+                  onMessage: () => _openClientChat(clients[index]),
                   onDelete: () async {
                     final confirm = await _showDeleteConfirmation();
                     if (confirm) {
@@ -233,6 +276,7 @@ class ClientCard extends StatelessWidget {
   final TailorClient client;
   final int orderCount;
   final VoidCallback onTap;
+  final VoidCallback onMessage;
   final VoidCallback onDelete;
 
   const ClientCard({
@@ -240,6 +284,7 @@ class ClientCard extends StatelessWidget {
     required this.client,
     required this.orderCount,
     required this.onTap,
+    required this.onMessage,
     required this.onDelete,
   });
 
@@ -346,16 +391,42 @@ class ClientCard extends StatelessWidget {
                             color: AppColors.textSecondary.withOpacity(0.7),
                           ),
                         ),
+                      if ((client.email ?? '').isNotEmpty)
+                        Text(
+                          client.email!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary.withOpacity(0.7),
+                          ),
+                        ),
                     ],
                   ),
                 ],
               ),
             ),
             // Delete Button
-            PopupMenuButton(
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'message') {
+                  onMessage();
+                }
+                if (value == 'delete') {
+                  onDelete();
+                }
+              },
               itemBuilder: (context) => [
-                PopupMenuItem(
-                  onTap: onDelete,
+                const PopupMenuItem<String>(
+                  value: 'message',
+                  child: Row(
+                    children: [
+                      Icon(Icons.chat_bubble_outline, size: 18),
+                      SizedBox(width: 8),
+                      Text('Open Chat'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'delete',
                   child: const Row(
                     children: [
                       Icon(Icons.delete, size: 18),
@@ -422,6 +493,10 @@ class _AddClientFormState extends State<AddClientForm> {
 
   int _daysToDeliver = 7;
   bool _isLoading = false;
+  String? _selectedUserId;
+  String? _selectedUserName;
+  String? _selectedUserEmail;
+  String? _selectedUserPhone;
 
   @override
   void initState() {
@@ -640,6 +715,250 @@ class _AddClientFormState extends State<AddClientForm> {
     });
   }
 
+  bool _isProfessionalRole(String role) {
+    final lower = role.toLowerCase();
+    return lower.contains('tailor') ||
+        lower.contains('seamstress') ||
+        lower.contains('fabric') ||
+        lower.contains('seller');
+  }
+
+  Future<void> _pickExistingAppUser() async {
+    final currentUid = _auth.currentUser?.uid;
+    final selected = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        String search = '';
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(sheetContext).size.height * 0.75,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'Search app users',
+                          prefixIcon: Icon(Icons.search),
+                        ),
+                        onChanged: (value) {
+                          setSheetState(() {
+                            search = value.trim().toLowerCase();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection('users')
+                            .limit(300)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  'Could not load users. Please check Firestore read rules for users collection. Error: ${snapshot.error}',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            );
+                          }
+
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+
+                          final docs = snapshot.data!.docs.where((doc) {
+                            if (currentUid != null && doc.id == currentUid) {
+                              return false;
+                            }
+
+                            final data = doc.data() as Map<String, dynamic>?;
+                            final name = (data?['username'] ??
+                                    data?['fullName'] ??
+                                    data?['name'] ??
+                                    '')
+                                .toString();
+                            final email = (data?['email'] ?? '').toString();
+                            final phone =
+                                (data?['phone'] ?? data?['phoneNumber'] ?? '')
+                                    .toString();
+
+                            if (search.isEmpty) return true;
+                            final haystack =
+                                '$name $email $phone ${doc.id}'.toLowerCase();
+                            return haystack.contains(search);
+                          }).toList();
+
+                          if (docs.isEmpty) {
+                            return Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  search.isEmpty
+                                      ? 'No users found. Create a client account first or check roles/data in users collection.'
+                                      : 'No matching users found for "$search".',
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            );
+                          }
+
+                          return ListView.separated(
+                            itemCount: docs.length,
+                            separatorBuilder: (_, _) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final doc = docs[index];
+                              final data = doc.data() as Map<String, dynamic>?;
+                              final name = (data?['username'] ??
+                                      data?['fullName'] ??
+                                      data?['name'] ??
+                                      'User')
+                                  .toString();
+                              final email = (data?['email'] ?? '').toString();
+                              final phone = (data?['phone'] ??
+                                      data?['phoneNumber'] ??
+                                      '')
+                                  .toString();
+
+                              return ListTile(
+                                leading: const CircleAvatar(
+                                  child: Icon(Icons.person),
+                                ),
+                                title: Text(name),
+                                subtitle: Text(
+                                  [email, phone].where((s) => s.isNotEmpty).join(' • '),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () {
+                                  Navigator.pop(sheetContext, {
+                                    'userId': doc.id,
+                                    'name': name,
+                                    'email': email,
+                                    'phone': phone,
+                                  });
+                                },
+                              );
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (selected == null) return;
+
+    setState(() {
+      _selectedUserId = selected['userId'];
+      _selectedUserName = selected['name'];
+      _selectedUserEmail = selected['email'];
+      _selectedUserPhone = selected['phone'];
+
+      _clientNameController.text = _selectedUserName ?? '';
+      _clientEmailController.text = _selectedUserEmail ?? '';
+      _clientPhoneController.text = _selectedUserPhone ?? '';
+    });
+  }
+
+  void _clearSelectedAppUser() {
+    setState(() {
+      _selectedUserId = null;
+      _selectedUserName = null;
+      _selectedUserEmail = null;
+      _selectedUserPhone = null;
+    });
+  }
+
+  Future<void> _syncLinkedUserOrderAndChat({
+    required String orderId,
+    required String tailorId,
+    required String clientUserId,
+    required String clientName,
+    required String style,
+    required DateTime dueDate,
+  }) async {
+    final now = DateTime.now();
+    final tailorDisplayName = (_auth.currentUser?.displayName ?? '').trim();
+    final ids = [tailorId, clientUserId]..sort();
+    final chatId = '${ids[0]}_${ids[1]}';
+    final days = dueDate.difference(now).inDays;
+    final dueText = days <= 0 ? 'today' : 'in $days day(s)';
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    final incomingOrderRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(clientUserId)
+        .collection('incoming_orders')
+        .doc(orderId);
+    batch.set(incomingOrderRef, {
+      'orderId': orderId,
+      'tailorId': tailorId,
+      'clientUserId': clientUserId,
+      'clientName': clientName,
+      'style': style,
+      'status': 'active',
+      'dueDate': Timestamp.fromDate(dueDate),
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'source': 'app_direct_sync',
+    }, SetOptions(merge: true));
+
+    final clientNotificationRef =
+        FirebaseFirestore.instance.collection('notifications').doc();
+    batch.set(clientNotificationRef, {
+      'userId': clientUserId,
+      'title': 'New Order Assigned',
+      'body': 'Your $style order has been created and is due $dueText.',
+      'orderId': orderId,
+      'type': 'orderCreated',
+      'isRead': false,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
+    batch.set(chatRef, {
+      'participants': [tailorId, clientUserId],
+      'participantNames': {
+        tailorId:
+            tailorDisplayName.isNotEmpty ? tailorDisplayName : 'Tailor',
+        clientUserId: clientName,
+      },
+      'requestStatus': 'accepted',
+      'updatedAt': FieldValue.serverTimestamp(),
+      'lastMessage': 'Order created: $style (due $dueText)',
+    }, SetOptions(merge: true));
+
+    final orderMessageRef = chatRef.collection('messages').doc();
+    batch.set(orderMessageRef, {
+      'senderId': tailorId,
+      'text': 'Order created: $style. Estimated completion is $dueText.',
+      'type': 'order_created',
+      'orderId': orderId,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+  }
+
   void _removeCustomMeasurement(int index) {
     setState(() {
       for (var c in _customMeasurements[index].values) {
@@ -711,6 +1030,7 @@ class _AddClientFormState extends State<AddClientForm> {
         phone: _clientPhoneController.text.trim(),
         email: _clientEmailController.text.trim(),
         profileImageUrl: null,
+        linkedUserId: _selectedUserId,
         createdAt: DateTime.now(),
       );
 
@@ -737,6 +1057,7 @@ class _AddClientFormState extends State<AddClientForm> {
         tailorId: ownerId,
         clientName: _clientNameController.text.trim(),
         clientId: clientId,
+        clientUserId: _selectedUserId,
         style: _styleController.text.trim(),
         basePrice: parsedPrice,
         measurements: widget.isFabricSeller
@@ -748,7 +1069,26 @@ class _AddClientFormState extends State<AddClientForm> {
         dueDate: DateTime.now().add(Duration(days: _daysToDeliver)),
       );
 
-      await orderService.createCustomOrder(order);
+      final orderId = await orderService.createCustomOrder(order);
+
+      final linkedUserId = (_selectedUserId ?? '').trim();
+      bool linkedSyncSuccessful = false;
+      String? linkedSyncError;
+      if (linkedUserId.isNotEmpty) {
+        try {
+          await _syncLinkedUserOrderAndChat(
+            orderId: orderId,
+            tailorId: ownerId,
+            clientUserId: linkedUserId,
+            clientName: _clientNameController.text.trim(),
+            style: _styleController.text.trim(),
+            dueDate: DateTime.now().add(Duration(days: _daysToDeliver)),
+          );
+          linkedSyncSuccessful = true;
+        } catch (e) {
+          linkedSyncError = e.toString();
+        }
+      }
 
       // Keep seller Orders screen in sync by writing fabric_orders too.
       if (widget.isFabricSeller) {
@@ -787,6 +1127,52 @@ class _AddClientFormState extends State<AddClientForm> {
         );
 
         await _fabricSellerService.createFabricOrder(fabricOrder);
+      }
+
+      if (mounted) {
+        final isLinked = (_selectedUserId ?? '').trim().isNotEmpty;
+        final linkedSyncFailed = isLinked && !linkedSyncSuccessful;
+        final baseMessage = isLinked
+            ? (linkedSyncSuccessful
+                  ? 'Order created and linked user was synced to chat/order inbox.'
+                  : 'Order created, but linked user sync failed. Please check Firestore rules/network.')
+            : 'Order created. No linked app user was selected, so user-side sync is not enabled.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: linkedSyncFailed ? Colors.orange.shade700 : null,
+            content: Text(baseMessage),
+            duration: Duration(seconds: linkedSyncFailed ? 6 : 4),
+            action: linkedSyncFailed
+                ? SnackBarAction(
+                    label: 'DETAILS',
+                    textColor: Colors.white,
+                    onPressed: () {
+                      if (!mounted) return;
+                      final detail = (linkedSyncError ?? '')
+                          .replaceFirst('Exception: ', '')
+                          .trim();
+                      showDialog(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Linked Sync Failed'),
+                          content: Text(
+                            detail.isEmpty
+                                ? 'Unable to complete linked chat/order sync. Please verify permissions and connectivity.'
+                                : detail,
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(dialogContext),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  )
+                : null,
+          ),
+        );
       }
 
       if (mounted) {
@@ -848,6 +1234,32 @@ class _AddClientFormState extends State<AddClientForm> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Client Name
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _pickExistingAppUser,
+                          icon: const Icon(Icons.person_search_outlined),
+                          label: Text(
+                            _selectedUserId == null
+                                ? 'Select Existing App User (Optional)'
+                                : 'Linked: ${_selectedUserName ?? 'User'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      if (_selectedUserId != null) ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: _clearSelectedAppUser,
+                          tooltip: 'Unlink selected user',
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   TextFormField(
                     controller: _clientNameController,
                     decoration: InputDecoration(

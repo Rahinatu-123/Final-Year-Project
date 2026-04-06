@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../services/profile_image_service.dart';
+import 'chat.dart';
 
 class UserProfilePage extends StatefulWidget {
   final String uid;
@@ -137,9 +138,65 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
   }
 
+  Future<void> _openOrCreateDirectChat() async {
+    final current = FirebaseAuth.instance.currentUser;
+    if (current == null || current.uid == widget.uid) return;
+
+    final ids = [current.uid, widget.uid]..sort();
+    final chatId = '${ids[0]}_${ids[1]}';
+    final chatRef = FirebaseFirestore.instance.collection('chats').doc(chatId);
+    final chatSnapshot = await chatRef.get();
+
+    final otherUserName = (_userData?['username'] ??
+            _userData?['fullName'] ??
+            _userData?['name'] ??
+            'User')
+        .toString();
+
+    if (!chatSnapshot.exists) {
+      final requestStatus = _isConnected ? 'accepted' : 'pending';
+      await chatRef.set({
+        'participants': [current.uid, widget.uid],
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastMessage': _isConnected
+            ? 'Tap to start chatting'
+            : 'Sent a message request',
+        'participantNames': {
+          current.uid: (current.displayName ?? 'User'),
+          widget.uid: otherUserName,
+        },
+        'requestStatus': requestStatus,
+        if (requestStatus == 'pending') ...{
+          'requestSenderId': current.uid,
+          'requestSenderName': (current.displayName ?? 'User'),
+          'requestRecipientId': widget.uid,
+          'requestRecipientName': otherUserName,
+          'requestCreatedAt': FieldValue.serverTimestamp(),
+        },
+      }, SetOptions(merge: true));
+
+      if (!_isConnected && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Message request sent')),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(chatId: chatId, otherUserName: otherUserName),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileImage = resolveProfileImage(_userData);
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final canMessage = currentUserId != null && currentUserId != widget.uid;
 
     return Scaffold(
       appBar: AppBar(title: Text(_userData?['username'] ?? 'Profile')),
@@ -151,55 +208,117 @@ class _UserProfilePageState extends State<UserProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 36,
-                          backgroundImage: profileImage.isNotEmpty
-                              ? NetworkImage(profileImage) as ImageProvider
-                              : null,
-                          child: profileImage.isEmpty
-                              ? const Icon(Icons.person, size: 36)
-                              : null,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _userData?['username'] ??
-                                    _userData?['fullName'] ??
-                                    'User',
-                                style: AppTextStyles.h3,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 8),
-                              _buildConnectionCounts(),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isCompact = constraints.maxWidth < 380;
+
+                        final connectButton = SizedBox(
                           height: 36,
                           child: ElevatedButton(
                             onPressed: _toggleFollow,
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: isCompact ? 12 : 16,
                                 vertical: 8,
                               ),
-                              minimumSize: const Size(80, 36),
+                              minimumSize: const Size(0, 36),
                               textStyle: AppTextStyles.labelSmall,
                             ),
                             child: Text(
                               _isConnected ? 'Disconnect' : 'Connect',
                             ),
                           ),
-                        ),
-                      ],
+                        );
+
+                        if (isCompact) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 36,
+                                    backgroundImage: profileImage.isNotEmpty
+                                        ? NetworkImage(profileImage)
+                                              as ImageProvider
+                                        : null,
+                                    child: profileImage.isEmpty
+                                        ? const Icon(Icons.person, size: 36)
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _userData?['username'] ??
+                                              _userData?['fullName'] ??
+                                              'User',
+                                          style: AppTextStyles.h3,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 8),
+                                        _buildConnectionCounts(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              connectButton,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 36,
+                              backgroundImage: profileImage.isNotEmpty
+                                  ? NetworkImage(profileImage) as ImageProvider
+                                  : null,
+                              child: profileImage.isEmpty
+                                  ? const Icon(Icons.person, size: 36)
+                                  : null,
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _userData?['username'] ??
+                                        _userData?['fullName'] ??
+                                        'User',
+                                    style: AppTextStyles.h3,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildConnectionCounts(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            connectButton,
+                          ],
+                        );
+                      },
                     ),
+                    if (canMessage) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _openOrCreateDirectChat,
+                          icon: const Icon(Icons.chat_bubble_outline),
+                          label: Text(_isConnected ? 'Message' : 'Send Message Request'),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     _buildBusinessInfoSection(),
                     const SizedBox(height: 20),
@@ -415,19 +534,41 @@ class _UserProfilePageState extends State<UserProfilePage> {
               style: AppTextStyles.bodyLarge.copyWith(
                 fontWeight: FontWeight.w700,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           if (businessDescription.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(businessDescription, style: AppTextStyles.bodyMedium),
+            Text(
+              businessDescription,
+              style: AppTextStyles.bodyMedium,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
           if (businessAddress.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text('Location: $businessAddress', style: AppTextStyles.bodySmall),
+            Text(
+              'Location: $businessAddress',
+              style: AppTextStyles.bodySmall,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           ],
           if (businessPhone.isNotEmpty)
-            Text('Phone: $businessPhone', style: AppTextStyles.bodySmall),
+            Text(
+              'Phone: $businessPhone',
+              style: AppTextStyles.bodySmall,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
           if (businessEmail.isNotEmpty)
-            Text('Email: $businessEmail', style: AppTextStyles.bodySmall),
+            Text(
+              'Email: $businessEmail',
+              style: AppTextStyles.bodySmall,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
     );

@@ -19,6 +19,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   final GroupOrderService _groupOrderService = GroupOrderService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final Map<String, TextEditingController> _priceControllers = {};
+  bool _isCreatingTailorOrder = false;
 
   @override
   void dispose() {
@@ -60,6 +61,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         final isCreator = user?.uid == group.createdById;
         final isGroupFull = effectiveStatus == GroupOrderStatus.full;
         final isGroupClosed = effectiveStatus == GroupOrderStatus.closed;
+        final canEditGroup =
+            isCreator &&
+            (group.tailorOrderId == null || group.tailorOrderId!.isEmpty) &&
+            effectiveStatus != GroupOrderStatus.inProgress &&
+            effectiveStatus != GroupOrderStatus.completed &&
+            effectiveStatus != GroupOrderStatus.cancelled;
+        final canCreateTailorOrder =
+            isProfessional &&
+            isGroupFull &&
+            (group.tailorOrderId == null || group.tailorOrderId!.isEmpty);
         GroupOrderMember? userMember;
         try {
           userMember = group.members.firstWhere((m) => m.userId == user?.uid);
@@ -89,6 +100,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               ),
             ),
             actions: [
+              if (canEditGroup)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  tooltip: 'Edit group',
+                  onPressed: () => _showEditGroupDialog(group),
+                ),
               if (isCreator)
                 IconButton(
                   icon: const Icon(Icons.delete_outline),
@@ -171,6 +188,68 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           ],
                         ),
                       _buildMembersSection(group, isProfessional, user?.uid),
+                      if (canCreateTailorOrder) ...[
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton.icon(
+                            onPressed: _isCreatingTailorOrder
+                                ? null
+                                : () => _createTailorOrderFromGroup(group),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.success,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            icon: _isCreatingTailorOrder
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  )
+                                : const Icon(Icons.playlist_add_check),
+                            label: Text(
+                              _isCreatingTailorOrder
+                                  ? 'Creating Order...'
+                                  : 'Create Order From Full Group',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else if (isProfessional &&
+                          group.tailorOrderId != null &&
+                          group.tailorOrderId!.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.success.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.success.withOpacity(0.35),
+                            ),
+                          ),
+                          child: Text(
+                            'Order created for this group: ${group.tailorOrderId}',
+                            style: const TextStyle(
+                              color: AppColors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 32),
                       SizedBox(
                         width: double.infinity,
@@ -211,6 +290,166 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         );
       },
     );
+  }
+
+  Future<void> _showEditGroupDialog(GroupOrder group) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final nameController = TextEditingController(text: group.name);
+    final descriptionController = TextEditingController(
+      text: group.description,
+    );
+    final participantController = TextEditingController(
+      text: group.maxParticipants.toString(),
+    );
+    final deadlineController = TextEditingController(
+      text:
+          '${group.deadline.day}/${group.deadline.month}/${group.deadline.year}',
+    );
+
+    DateTime selectedDeadline = group.deadline;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogInnerContext, setDialogState) {
+          return AlertDialog(
+            title: const Text('Edit Group Details'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(labelText: 'Group name'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descriptionController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: participantController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Number of people',
+                      helperText: 'Minimum 5 people',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: deadlineController,
+                    readOnly: true,
+                    decoration: const InputDecoration(labelText: 'Deadline'),
+                    onTap: () async {
+                      FocusScope.of(dialogInnerContext).unfocus();
+                      await Future<void>.delayed(Duration.zero);
+                      final picked = await showDatePicker(
+                        context: this.context,
+                        initialDate: selectedDeadline,
+                        firstDate: DateTime.now(),
+                        lastDate: DateTime.now().add(const Duration(days: 90)),
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          selectedDeadline = picked;
+                          deadlineController.text =
+                              '${picked.day}/${picked.month}/${picked.year}';
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Current members: ${group.members.length}',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final participantCount = int.tryParse(
+                    participantController.text.trim(),
+                  );
+                  if (nameController.text.trim().isEmpty) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Group name cannot be empty'),
+                        backgroundColor: AppColors.coral,
+                      ),
+                    );
+                    return;
+                  }
+                  if (participantCount == null || participantCount < 5) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Group size must be at least 5'),
+                        backgroundColor: AppColors.coral,
+                      ),
+                    );
+                    return;
+                  }
+                  if (participantCount < group.members.length) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Group size cannot be smaller than current members (${group.members.length})',
+                        ),
+                        backgroundColor: AppColors.coral,
+                      ),
+                    );
+                    return;
+                  }
+
+                  Navigator.pop(dialogContext);
+                  try {
+                    await _groupOrderService.updateGroupDetails(
+                      groupId: group.id,
+                      name: nameController.text.trim(),
+                      description: descriptionController.text.trim(),
+                      deadline: selectedDeadline,
+                      maxParticipants: participantCount,
+                    );
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Group updated successfully'),
+                        backgroundColor: AppColors.success,
+                      ),
+                    );
+                    setState(() {});
+                  } catch (e) {
+                    if (!mounted) return;
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to update group: $e'),
+                        backgroundColor: AppColors.coral,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    nameController.dispose();
+    descriptionController.dispose();
+    participantController.dispose();
+    deadlineController.dispose();
   }
 
   Widget _buildNonMemberPreview(
@@ -989,6 +1228,42 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.coral),
       );
+    }
+  }
+
+  Future<void> _createTailorOrderFromGroup(GroupOrder group) async {
+    if (_isCreatingTailorOrder) return;
+
+    setState(() {
+      _isCreatingTailorOrder = true;
+    });
+
+    try {
+      final orderId = await _groupOrderService.createTailorOrderFromFullGroup(
+        group.id,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Order created successfully: $orderId'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to create order: $e'),
+          backgroundColor: AppColors.coral,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isCreatingTailorOrder = false;
+      });
     }
   }
 

@@ -24,9 +24,39 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
   late TextEditingController _deadlineController;
+  late TextEditingController _participantCountController;
   String? _selectedSellerId;
   String? _selectedSellerName;
   String? _selectedSellerImage;
+
+  bool _isProfessionalAvailable(Map<String, dynamic> data) {
+    final boolFields = [
+      data['isActive'],
+      data['isAvailable'],
+      data['available'],
+    ];
+    for (final value in boolFields) {
+      if (value is bool && value == false) {
+        return false;
+      }
+    }
+
+    final status = (data['availabilityStatus'] ?? data['status'] ?? '')
+        .toString()
+        .toLowerCase();
+    const unavailableStatuses = {
+      'offline',
+      'unavailable',
+      'inactive',
+      'closed',
+      'busy',
+    };
+    if (unavailableStatuses.contains(status)) {
+      return false;
+    }
+
+    return true;
+  }
 
   @override
   void initState() {
@@ -34,6 +64,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
     _deadlineController = TextEditingController();
+    _participantCountController = TextEditingController(text: '5');
   }
 
   @override
@@ -41,6 +72,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
     _nameController.dispose();
     _descriptionController.dispose();
     _deadlineController.dispose();
+    _participantCountController.dispose();
     super.dispose();
   }
 
@@ -335,6 +367,8 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
           const SizedBox(height: 16),
           _buildSellerSelector(),
           const SizedBox(height: 16),
+          _buildParticipantCountField(),
+          const SizedBox(height: 16),
           _buildDatePicker(),
           const SizedBox(height: 16),
           _buildFormField(
@@ -405,8 +439,28 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
 
               final sellers = snapshot.data!.docs.where((doc) {
                 final role = (doc['role'] ?? '').toString().toLowerCase();
-                return role.contains('fabric') || role.contains('seller');
+                if (!(role.contains('fabric') || role.contains('seller'))) {
+                  return false;
+                }
+
+                return _isProfessionalAvailable(
+                  doc.data() as Map<String, dynamic>,
+                );
               }).toList();
+
+              final hasSelectedSeller =
+                  _selectedSellerId != null &&
+                  sellers.any((doc) => doc.id == _selectedSellerId);
+              if (_selectedSellerId != null && !hasSelectedSeller) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  setState(() {
+                    _selectedSellerId = null;
+                    _selectedSellerName = null;
+                    _selectedSellerImage = null;
+                  });
+                });
+              }
 
               return DropdownButtonFormField<String>(
                 initialValue: _selectedSellerId,
@@ -445,6 +499,16 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
             },
           ),
         ),
+        if (_selectedSellerId == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Only currently available sellers are shown.',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -507,6 +571,45 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
     );
   }
 
+  Widget _buildParticipantCountField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Number of People',
+          style: AppTextStyles.labelLarge.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: AppShadows.soft,
+          ),
+          child: TextField(
+            controller: _participantCountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              hintText: 'Minimum 5 people',
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'The group can be set to 5 or more people.',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFormField(
     String label,
     String hint,
@@ -547,7 +650,8 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
   Future<void> _createGroup() async {
     if (_nameController.text.isEmpty ||
         _selectedSellerId == null ||
-        _deadlineController.text.isEmpty) {
+        _deadlineController.text.isEmpty ||
+        _participantCountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please fill all required fields"),
@@ -561,6 +665,11 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception('User not authenticated');
+
+      final participantCount = int.tryParse(_participantCountController.text);
+      if (participantCount == null || participantCount < 5) {
+        throw Exception('Number of people must be at least 5');
+      }
 
       // Parse deadline
       final deadlineParts = _deadlineController.text.split('/');
@@ -581,7 +690,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
         professionalImage: _selectedSellerImage ?? '',
         description: _descriptionController.text,
         discountPercentage: 10.0,
-        maxParticipants: 10,
+        maxParticipants: participantCount,
         members: [
           GroupOrderMember(
             userId: user.uid,
@@ -612,6 +721,7 @@ class _BuyFabricWithMePageState extends State<BuyFabricWithMePage> {
         _nameController.clear();
         _descriptionController.clear();
         _deadlineController.clear();
+        _participantCountController.text = '5';
         _selectedSellerId = null;
         _selectedSellerName = null;
         _selectedSellerImage = null;

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/group_order.dart';
 import '../services/group_order_service.dart';
+import '../services/profile_service.dart';
 import '../services/profile_image_service.dart';
 import 'group_detail.dart';
 
@@ -17,6 +18,7 @@ class SewWithMePage extends StatefulWidget {
 class _SewWithMePageState extends State<SewWithMePage> {
   bool _showCreateForm = false;
   final GroupOrderService _groupOrderService = GroupOrderService();
+  final ProfileService _profileService = ProfileService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -24,9 +26,131 @@ class _SewWithMePageState extends State<SewWithMePage> {
   late TextEditingController _nameController;
   late TextEditingController _descriptionController;
   late TextEditingController _deadlineController;
+  late TextEditingController _participantCountController;
   String? _selectedTailorId;
   String? _selectedTailorName;
   String? _selectedTailorImage;
+
+  bool _isTailorRole(String role) {
+    final lower = role.toLowerCase();
+    return lower.contains('tailor') || lower.contains('seamstress');
+  }
+
+  bool _isSellerRole(String role) {
+    final lower = role.toLowerCase();
+    return lower.contains('fabric') || lower.contains('seller');
+  }
+
+  bool _isProfessionalAvailable(Map<String, dynamic> data) {
+    final boolFields = [
+      data['isActive'],
+      data['isAvailable'],
+      data['available'],
+    ];
+    for (final value in boolFields) {
+      if (value is bool && value == false) {
+        return false;
+      }
+    }
+
+    final status = (data['availabilityStatus'] ?? data['status'] ?? '')
+        .toString()
+        .toLowerCase();
+    const unavailableStatuses = {
+      'offline',
+      'unavailable',
+      'inactive',
+      'closed',
+      'busy',
+    };
+    if (unavailableStatuses.contains(status)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  Future<List<_ProfessionalOption>> _loadTailorOptionsFromUsers() async {
+    final snapshot = await _firestore.collection('users').get();
+    return snapshot.docs
+        .where((doc) {
+          final data = doc.data();
+          final role = (data['role'] ?? '').toString();
+          return _isTailorRole(role) || _isSellerRole(role);
+        })
+        .map(
+          (doc) => _ProfessionalOption(
+            id: doc.id,
+            name: _displayNameFromUser(doc.data()),
+            imageUrl: resolveProfileImage(doc.data()),
+            source: 'users',
+            rawData: doc.data(),
+          ),
+        )
+        .toList();
+  }
+
+  Future<List<_ProfessionalOption>> _loadTailorOptionsFromTailors() async {
+    final profiles = await _profileService.getAllTailors(limit: 500);
+    return profiles
+        .map(
+          (profile) => _ProfessionalOption(
+            id: profile.uid,
+            name: profile.businessName.trim().isNotEmpty
+                ? profile.businessName
+                : 'Tailor',
+            imageUrl: profile.profileImageUrl ?? '',
+            source: 'tailors',
+            rawData: {
+              'isActive': true,
+              'isAvailable': true,
+              'available': true,
+              'status': 'active',
+            },
+          ),
+        )
+        .toList();
+  }
+
+  String _displayNameFromUser(Map<String, dynamic> data) {
+    final name = (data['fullName'] ?? data['name'] ?? data['firstName'] ?? '')
+        .toString()
+        .trim();
+    return name.isNotEmpty ? name : 'Tailor';
+  }
+
+  List<_ProfessionalOption> _mergeOptions(
+    List<_ProfessionalOption> first,
+    List<_ProfessionalOption> second,
+  ) {
+    final merged = <String, _ProfessionalOption>{};
+    for (final option in [...first, ...second]) {
+      if (option.id.isEmpty) continue;
+      final existing = merged[option.id];
+      if (existing == null) {
+        merged[option.id] = option;
+        continue;
+      }
+
+      final preferTailors =
+          existing.source != 'tailors' && option.source == 'tailors';
+      if (preferTailors ||
+          existing.name == 'Tailor' && option.name.trim().isNotEmpty) {
+        merged[option.id] = option.copyWith(
+          name: option.name.trim().isNotEmpty ? option.name : existing.name,
+          imageUrl: option.imageUrl.isNotEmpty
+              ? option.imageUrl
+              : existing.imageUrl,
+        );
+      }
+    }
+
+    final options = merged.values.toList();
+    options.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
+    return options;
+  }
 
   @override
   void initState() {
@@ -34,6 +158,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
     _deadlineController = TextEditingController();
+    _participantCountController = TextEditingController(text: '5');
   }
 
   @override
@@ -41,6 +166,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
     _nameController.dispose();
     _descriptionController.dispose();
     _deadlineController.dispose();
+    _participantCountController.dispose();
     super.dispose();
   }
 
@@ -335,6 +461,8 @@ class _SewWithMePageState extends State<SewWithMePage> {
           const SizedBox(height: 16),
           _buildTailorSelector(),
           const SizedBox(height: 16),
+          _buildParticipantCountField(),
+          const SizedBox(height: 16),
           _buildDatePicker(),
           const SizedBox(height: 16),
           _buildFormField(
@@ -390,10 +518,10 @@ class _SewWithMePageState extends State<SewWithMePage> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: AppShadows.soft,
           ),
-          child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore.collection('users').snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
+          child: FutureBuilder<List<_ProfessionalOption>>(
+            future: _loadTailorOptionsFromUsers(),
+            builder: (context, userSnapshot) {
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
                 return const Padding(
                   padding: EdgeInsets.all(16),
                   child: SizedBox(
@@ -403,49 +531,93 @@ class _SewWithMePageState extends State<SewWithMePage> {
                 );
               }
 
-              // Filter for tailor and seamstress roles
-              final tailors = snapshot.data!.docs.where((doc) {
-                final role = (doc['role'] ?? '').toString().toLowerCase();
-                return role.contains('tailor') || role.contains('seamstress');
-              }).toList();
+              return FutureBuilder<List<_ProfessionalOption>>(
+                future: _loadTailorOptionsFromTailors(),
+                builder: (context, tailorSnapshot) {
+                  if (tailorSnapshot.connectionState ==
+                      ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: SizedBox(
+                        height: 40,
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
 
-              return DropdownButtonFormField<String>(
-                initialValue: _selectedTailorId,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                ),
-                hint: const Text("Choose a tailor"),
-                items: tailors.map((doc) {
-                  return DropdownMenuItem(
-                    value: doc.id,
-                    child: Text(
-                      doc['fullName'] ?? doc['firstName'] ?? 'Unknown',
-                    ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    final tailor = tailors.firstWhere((doc) => doc.id == value);
-                    setState(() {
-                      _selectedTailorId = value;
-                      _selectedTailorName =
-                          tailor['fullName'] ??
-                          tailor['firstName'] ??
-                          'Unknown';
-                      _selectedTailorImage = resolveProfileImage(
-                        tailor.data() as Map<String, dynamic>,
-                      );
+                  final userOptions = userSnapshot.data ?? const [];
+                  final tailorOptions = tailorSnapshot.data ?? const [];
+
+                  final options = _mergeOptions(userOptions, tailorOptions)
+                      .where(
+                        (option) => _isProfessionalAvailable(option.rawData),
+                      )
+                      .toList();
+
+                  final hasSelectedTailor =
+                      _selectedTailorId != null &&
+                      options.any((option) => option.id == _selectedTailorId);
+                  if (_selectedTailorId != null && !hasSelectedTailor) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      setState(() {
+                        _selectedTailorId = null;
+                        _selectedTailorName = null;
+                        _selectedTailorImage = null;
+                      });
                     });
                   }
+
+                  if (options.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text('No available tailors found.'),
+                    );
+                  }
+
+                  return DropdownButtonFormField<String>(
+                    initialValue: _selectedTailorId,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                    ),
+                    hint: const Text("Choose a tailor"),
+                    items: options.map((option) {
+                      return DropdownMenuItem(
+                        value: option.id,
+                        child: Text(option.name),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      final selected = options.firstWhere(
+                        (option) => option.id == value,
+                      );
+                      setState(() {
+                        _selectedTailorId = selected.id;
+                        _selectedTailorName = selected.name;
+                        _selectedTailorImage = selected.imageUrl;
+                      });
+                    },
+                  );
                 },
               );
             },
           ),
         ),
+        if (_selectedTailorId == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Only currently available tailors are shown.',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -508,6 +680,45 @@ class _SewWithMePageState extends State<SewWithMePage> {
     );
   }
 
+  Widget _buildParticipantCountField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Number of People',
+          style: AppTextStyles.labelLarge.copyWith(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: AppShadows.soft,
+          ),
+          child: TextField(
+            controller: _participantCountController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              hintText: 'Minimum 5 people',
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 16,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'The group can be set to 5 or more people.',
+          style: AppTextStyles.labelSmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFormField(
     String label,
     String hint,
@@ -548,7 +759,8 @@ class _SewWithMePageState extends State<SewWithMePage> {
   Future<void> _createGroup() async {
     if (_nameController.text.isEmpty ||
         _selectedTailorId == null ||
-        _deadlineController.text.isEmpty) {
+        _deadlineController.text.isEmpty ||
+        _participantCountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please fill all required fields"),
@@ -562,6 +774,11 @@ class _SewWithMePageState extends State<SewWithMePage> {
     try {
       final user = _auth.currentUser;
       if (user == null) throw Exception('User not authenticated');
+
+      final participantCount = int.tryParse(_participantCountController.text);
+      if (participantCount == null || participantCount < 5) {
+        throw Exception('Number of people must be at least 5');
+      }
 
       // Parse deadline
       final deadlineParts = _deadlineController.text.split('/');
@@ -582,7 +799,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
         professionalImage: _selectedTailorImage ?? '',
         description: _descriptionController.text,
         discountPercentage: 10.0,
-        maxParticipants: 10,
+        maxParticipants: participantCount,
         members: [
           GroupOrderMember(
             userId: user.uid,
@@ -613,6 +830,7 @@ class _SewWithMePageState extends State<SewWithMePage> {
         _nameController.clear();
         _descriptionController.clear();
         _deadlineController.clear();
+        _participantCountController.text = '5';
         _selectedTailorId = null;
         _selectedTailorName = null;
         _selectedTailorImage = null;
@@ -628,5 +846,37 @@ class _SewWithMePageState extends State<SewWithMePage> {
         ),
       );
     }
+  }
+}
+
+class _ProfessionalOption {
+  final String id;
+  final String name;
+  final String imageUrl;
+  final String source;
+  final Map<String, dynamic> rawData;
+
+  const _ProfessionalOption({
+    required this.id,
+    required this.name,
+    required this.imageUrl,
+    required this.source,
+    required this.rawData,
+  });
+
+  _ProfessionalOption copyWith({
+    String? id,
+    String? name,
+    String? imageUrl,
+    String? source,
+    Map<String, dynamic>? rawData,
+  }) {
+    return _ProfessionalOption(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      imageUrl: imageUrl ?? this.imageUrl,
+      source: source ?? this.source,
+      rawData: rawData ?? this.rawData,
+    );
   }
 }

@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "my-final-project-5f34f"
-  }
+  },
+  "targets": {},
+  "etags": {}
 }
